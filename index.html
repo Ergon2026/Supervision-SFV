@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Supervisión SFV Campo</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f4c3a">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src="vendor/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --verde:#0f4c3a; --verde-claro:#1a6b52; --amarillo:#f0c419;
+    --bg:#f4f6f5; --card:#ffffff; --texto:#1c2b26; --gris:#6b7a75;
+    --rojo:#c0392b; --borde:#dfe6e3; --naranja:#e07a1f;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,Roboto,Segoe UI,sans-serif;background:var(--bg);color:var(--texto);padding-bottom:90px;}
+  header{background:var(--verde);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+  header h1{font-size:16px;margin:0 0 2px;}
+  header .sub{font-size:12px;opacity:.85;}
+  .status-bar{display:flex;gap:8px;padding:8px 16px;background:#eef4f1;font-size:12px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--borde);}
+  .pill{padding:3px 9px;border-radius:12px;font-weight:600;}
+  .pill.online{background:#d6f0e2;color:var(--verde);}
+  .pill.offline{background:#fde3e0;color:var(--rojo);}
+  .pill.pending{background:#fff3cd;color:#8a6d00;}
+  .tabs{display:flex;background:#fff;border-bottom:1px solid var(--borde);position:sticky;top:56px;z-index:9;}
+  .tab{flex:1;text-align:center;padding:11px 4px;font-size:13px;font-weight:600;color:var(--gris);border-bottom:3px solid transparent;}
+  .tab.active{color:var(--verde);border-color:var(--amarillo);}
+  main{padding:14px;max-width:640px;margin:0 auto;}
+  .card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .card h2{font-size:14px;margin:0 0 12px;color:var(--verde);text-transform:uppercase;letter-spacing:.03em;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:13px;font-weight:600;margin-bottom:5px;}
+  .field .hint{font-size:11px;color:var(--gris);font-weight:400;margin-top:3px;}
+  input[type=text],input[type=number],select{width:100%;padding:11px;border:1px solid var(--borde);border-radius:8px;font-size:15px;background:#fff;}
+  input:focus,select:focus{outline:2px solid var(--verde-claro);}
+  .seg{display:flex;gap:8px;flex-wrap:wrap;}
+  .seg button{flex:1;min-width:90px;padding:11px 8px;border:1.5px solid var(--borde);border-radius:8px;background:#fff;font-size:13px;font-weight:600;color:var(--texto);}
+  .seg button.sel{background:var(--verde);border-color:var(--verde);color:#fff;}
+  .check-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eef1f0;gap:10px;}
+  .check-row:last-child{border-bottom:none;}
+  .check-row .txt{font-size:13px;line-height:1.35;flex:1;}
+  .check-row .txt small{color:var(--gris);display:block;font-size:11px;margin-top:2px;}
+  .ok-x{display:flex;gap:6px;}
+  .ok-x button{width:44px;height:38px;border-radius:8px;border:1.5px solid var(--borde);background:#fff;font-size:16px;font-weight:700;}
+  .ok-x button.ok.sel{background:#d6f0e2;border-color:var(--verde);color:var(--verde);}
+  .ok-x button.x.sel{background:#fde3e0;border-color:var(--rojo);color:var(--rojo);}
+  .hidden{display:none !important;}
+  .photo-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .photo-slot{width:96px;}
+  .photo-slot label{font-size:11px;text-align:center;display:block;margin-bottom:4px;font-weight:600;}
+  .photo-box{width:96px;height:96px;border:2px dashed var(--borde);border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;background:#fafcfb;}
+  .photo-box img{width:100%;height:100%;object-fit:cover;}
+  .photo-box .plus{font-size:26px;color:var(--gris);}
+  .photo-box input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+  .photo-inline{display:flex;align-items:center;gap:10px;margin-top:8px;}
+  .photo-inline .photo-box{width:56px;height:56px;flex-shrink:0;}
+  .photo-inline .photo-box .plus{font-size:20px;}
+  .photo-inline .txt{font-size:12px;color:var(--gris);}
+  .gps-box{display:flex;align-items:center;gap:10px;background:#eef4f1;border-radius:8px;padding:10px;font-size:13px;}
+  .gps-box button{padding:8px 12px;border-radius:7px;border:none;background:var(--verde);color:#fff;font-weight:600;font-size:12px;}
+  .btn{display:block;width:100%;padding:14px;border-radius:10px;border:none;font-size:15px;font-weight:700;cursor:pointer;}
+  .btn.primary{background:var(--verde);color:#fff;}
+  .btn.secondary{background:#fff;color:var(--verde);border:1.5px solid var(--verde);}
+  .btn.warn{background:var(--amarillo);color:#3a2e00;}
+  .btn.link{background:transparent;color:var(--verde);text-decoration:underline;padding:8px 0;font-weight:600;font-size:13px;width:auto;}
+  .btn-row{display:flex;gap:10px;}
+  .btn-row .btn{flex:1;}
+  .footer-actions{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--borde);padding:10px 14px;display:flex;gap:10px;max-width:640px;margin:0 auto;box-shadow:0 -2px 8px rgba(0,0,0,.06);}
+  .footer-actions .btn{flex:1;padding:13px;}
+  .record{background:#fff;border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid var(--borde);}
+  .record .top{display:flex;justify-content:space-between;font-size:13px;font-weight:700;gap:8px;}
+  .record .badges{display:flex;gap:6px;flex-wrap:wrap;}
+  .record .meta{font-size:11px;color:var(--gris);margin-top:3px;}
+  .badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;white-space:nowrap;}
+  .badge.pend{background:#fff3cd;color:#8a6d00;}
+  .badge.sync{background:#d6f0e2;color:var(--verde);}
+  .badge.prueba{background:#ffe3cc;color:var(--naranja);}
+  .empty{text-align:center;color:var(--gris);font-size:13px;padding:40px 10px;}
+  .config-note{font-size:11px;color:var(--gris);background:#fff8e1;border-radius:8px;padding:10px;margin-bottom:12px;}
+  .toast{position:fixed;bottom:75px;left:50%;transform:translateX(-50%);background:#1c2b26;color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;z-index:99;max-width:90%;text-align:center;}
+  .required::after{content:" *";color:var(--rojo);}
+  .home-hero{text-align:center;padding:6px 0 14px;}
+  .home-hero .big{font-size:15px;font-weight:700;color:var(--verde);}
+  .home-hero .small{font-size:12px;color:var(--gris);margin-top:2px;}
+  .checkbox-row{display:flex;align-items:center;gap:10px;background:#fff8ee;border:1px solid #ffe3cc;border-radius:8px;padding:10px;}
+  .checkbox-row input{width:20px;height:20px;flex-shrink:0;}
+  .checkbox-row label{font-size:12px;margin:0;color:#7a5a1e;}
+  .summary-chip{display:flex;justify-content:space-between;align-items:center;background:#eef4f1;border-radius:8px;padding:10px 12px;font-size:13px;}
+  .summary-chip .lbl{color:var(--gris);font-size:11px;}
+  .summary-chip .val{font-weight:700;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Supervisión SFV — Campo</h1>
+  <div class="sub">Registro de mediciones · funciona sin señal</div>
+</header>
+
+<div class="status-bar">
+  <span class="pill" id="pillOnline">…</span>
+  <span class="pill pending" id="pillPending">0 pendientes</span>
+  <span class="pill" style="background:#e9edec;color:#444" id="pillSynced">0 sincronizados</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="form">Nuevo registro</div>
+  <div class="tab" data-tab="list">Registros (<span id="tabCount">0</span>)</div>
+  <div class="tab" data-tab="config">Ajustes</div>
+</div>
+
+<main>
+
+<!-- ============ TAB: FORM ============ -->
+<section id="tab-form">
+
+  <!-- ---------- PASO 1 · PANTALLA PRINCIPAL: suministro + GPS ---------- -->
+  <div id="step-inicio">
+    <div class="home-hero">
+      <div class="big">Punto de suministro a supervisar</div>
+      <div class="small">Completa esto primero. El resto del formulario aparece después.</div>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label class="required">Código de suministro / Sistema</label>
+        <input type="text" id="f_codigo" placeholder="Ej: RER1-0001234" autofocus>
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>Ubicación GPS</label>
+        <div class="gps-box">
+          <span id="gpsText" style="flex:1;">Sin capturar</span>
+          <button type="button" id="btnGps">Capturar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label class="required">Técnico responsable</label>
+        <input type="text" id="f_tecnico" placeholder="Nombre y apellido o código">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <div class="checkbox-row">
+          <input type="checkbox" id="f_prueba">
+          <label for="f_prueba">Este es un registro de <b>PRUEBA</b> (podrás borrarlo después en Ajustes, y no se sincroniza a la Sheet)</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <button class="btn primary" id="btnIniciarRegistro">Continuar con el registro →</button>
+    </div>
+  </div>
+
+  <!-- ---------- PASO 2 · DETALLE TÉCNICO ---------- -->
+  <div id="step-detalle" class="hidden">
+
+    <div class="card" style="padding-top:10px;padding-bottom:10px;">
+      <div class="summary-chip">
+        <div>
+          <div class="lbl">Suministro</div>
+          <div class="val" id="resumenCodigo">—</div>
+        </div>
+        <button type="button" class="btn link" id="btnVolverInicio">← Cambiar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Fotos generales del equipo</h2>
+      <div class="photo-row">
+        <div class="photo-slot">
+          <label>Panel</label>
+          <div class="photo-box" id="pbox_panel"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
+        </div>
+        <div class="photo-slot">
+          <label>Batería</label>
+          <div class="photo-box" id="pbox_bateria"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
+        </div>
+        <div class="photo-slot">
+          <label>Controlador</label>
+          <div class="photo-box" id="pbox_controlador"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>1. Sistema fotovoltaico</h2>
+      <div class="field">
+        <label class="required">Estado del Sistema fotovoltaico</label>
+        <div class="seg" id="seg_estado">
+          <button type="button" data-val="COMPLETO">COMPLETO</button>
+          <button type="button" data-val="INCOMPLETO">INCOMPLETO</button>
+        </div>
+      </div>
+      <div class="field hidden" id="wrap_detalleCompleto">
+        <label>Detalle de sistema fotovoltaico completo</label>
+        <div class="seg" id="seg_detalleCompleto">
+          <button type="button" data-val="INSTALADO">INSTALADO</button>
+          <button type="button" data-val="DESINSTALADO">DESINSTALADO</button>
+        </div>
+      </div>
+      <div class="field hidden" id="wrap_detalleIncompleto">
+        <label>Detalle de sistema fotovoltaico incompleto</label>
+        <div class="seg" id="seg_detalleIncompleto">
+          <button type="button" data-val="DCEB">DCEB</button>
+          <button type="button" data-val="PANEL">PANEL</button>
+          <button type="button" data-val="NINGUNO">NINGUNO</button>
+        </div>
+        <div class="hint">Selección múltiple</div>
+      </div>
+      <div class="field hidden" id="wrap_casuistica" style="margin-bottom:0;">
+        <label>Casuística</label>
+        <div class="seg" id="seg_casuistica">
+          <button type="button" data-val="HURTO">HURTO</button>
+          <button type="button" data-val="VANDALISMO">VANDALISMO</button>
+          <button type="button" data-val="SINIESTRO">SINIESTRO</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2. Indicador de operación</h2>
+
+      <div class="field">
+        <label>Tensión del panel en circuito abierto (V)</label>
+        <input type="number" step="0.01" inputmode="decimal" id="f_tensPanel">
+        <div class="photo-inline">
+          <div class="photo-box" id="pbox_medicionPanel"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
+          <div class="txt">Foto de la medición (multímetro) en el panel</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Tensión de la batería (V)</label>
+        <input type="number" step="0.01" inputmode="decimal" id="f_tensBateria">
+        <div class="photo-inline">
+          <div class="photo-box" id="pbox_medicionBateria"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
+          <div class="txt">Foto de la medición (multímetro) en la batería</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Capacidad de carga de la batería (AH)</label>
+        <input type="number" step="0.01" inputmode="decimal" id="f_capBateria">
+      </div>
+      <div class="field">
+        <label>Modelo de la batería</label>
+        <input type="text" id="f_modeloBateria">
+      </div>
+      <div class="field">
+        <label>Tipo de controlador</label>
+        <input type="text" id="f_tipoControlador">
+      </div>
+
+      <div class="field">
+        <label>Tensión del controlador (tomacorriente) (V)</label>
+        <input type="number" step="0.01" inputmode="decimal" id="f_tensControlador">
+        <div class="photo-inline">
+          <div class="photo-box" id="pbox_medicionTomacorriente"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
+          <div class="txt">Foto de la medición en el tomacorriente (salida del controlador)</div>
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:0;">
+        <label>Descarga de data csv</label>
+        <div class="seg" id="seg_descargaCsv">
+          <button type="button" data-val="SI">SI</button>
+          <button type="button" data-val="NO">NO</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3. Indicador de mantenimiento</h2>
+      <div id="mtto-list"></div>
+      <div class="photo-inline" style="margin-top:12px;">
+        <div class="photo-box" id="pbox_cablesPvc"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
+        <div class="txt">Foto de los cables con tubería PVC hacia las luminarias</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <button class="btn primary" id="btnGuardar">Guardar registro en el equipo</button>
+      <div class="hint" style="margin-top:8px;text-align:center;">Se guarda en la memoria del celular. No necesita señal.</div>
+    </div>
+
+  </div>
+
+</section>
+
+<!-- ============ TAB: LIST ============ -->
+<section id="tab-list" class="hidden">
+  <div class="card" style="padding:10px 14px;">
+    <div class="btn-row">
+      <button class="btn secondary" id="btnExport">⬇ Exportar Excel (respaldo)</button>
+    </div>
+  </div>
+  <div id="records-container"></div>
+</section>
+
+<!-- ============ TAB: CONFIG ============ -->
+<section id="tab-config" class="hidden">
+  <div class="card">
+    <h2>Sincronización a Google Sheets</h2>
+    <div class="config-note">
+      Pega aquí la URL de implementación (Web App) de tu script de Apps Script. Se guarda en este celular y se usa automáticamente cuando haya señal. Los registros marcados como PRUEBA nunca se sincronizan.
+    </div>
+    <div class="field">
+      <label>URL del Web App (Apps Script)</label>
+      <input type="text" id="cfg_url" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+    </div>
+    <button class="btn primary" id="btnSaveCfg">Guardar</button>
+  </div>
+  <div class="card">
+    <h2>Estado del almacenamiento</h2>
+    <div class="field" style="margin-bottom:6px;"><span id="cfg_stats">—</span></div>
+    <div class="config-note" id="cfg_storageNote">Calculando espacio disponible…</div>
+    <div class="btn-row">
+      <button class="btn secondary" id="btnSyncNow">🔄 Sincronizar ahora</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Zona de riesgo</h2>
+    <div class="btn-row" style="margin-bottom:10px;">
+      <button class="btn warn" id="btnClearPrueba">Borrar registros de PRUEBA</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn warn" id="btnClearSynced">Borrar registros ya sincronizados</button>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div class="footer-actions">
+  <button class="btn secondary" id="footBtnExport">⬇ Excel</button>
+  <button class="btn primary" id="footBtnSync">🔄 Sincronizar</button>
+</div>
+
+<script>
+/* ============================================================
+   Supervisión SFV Campo — App offline-first
+   - IndexedDB: almacenamiento local persistente (sin señal)
+   - Sync: POST a Google Apps Script Web App cuando hay internet
+   - Export: genera .xlsx localmente en cualquier momento (SheetJS)
+   - Registros de PRUEBA: se pueden ingresar, se marcan aparte,
+     nunca se sincronizan, y se borran con un botón dedicado.
+   ============================================================ */
+
+const DB_NAME = 'supervision_sfv_db';
+const DB_VERSION = 1;
+const STORE = 'registros';
+let db;
+
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const _db = e.target.result;
+      if (!_db.objectStoreNames.contains(STORE)) {
+        const os = _db.createObjectStore(STORE, { keyPath: 'id' });
+        os.createIndex('synced', 'synced', { unique: false });
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e);
+  });
+}
+
+function dbAll(){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const os = tx.objectStore(STORE);
+    const req = os.getAll();
+    req.onsuccess = () => resolve(req.result.sort((a,b)=> b.fecha_hora.localeCompare(a.fecha_hora)));
+    req.onerror = (e) => reject(e);
+  });
+}
+
+function dbPut(record){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(record);
+    tx.oncomplete = () => resolve();
+    tx.onerror = (e) => reject(e);
+  });
+}
+
+function dbDelete(id){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = (e) => reject(e);
+  });
+}
+
+function uuid(){
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random()*16|0, v = c === 'x' ? r : (r&0x3|0x8);
+    return v.toString(16);
+  });
+}
+
+function toast(msg, ms=2600){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), ms);
+}
+
+/* ---------- Estado del formulario ---------- */
+const PHOTO_SLOTS = ['panel','bateria','controlador','medicionPanel','medicionBateria','medicionTomacorriente','cablesPvc'];
+
+let form = resetForm();
+function resetForm(){
+  const fotos = {};
+  PHOTO_SLOTS.forEach(s => fotos[s] = null);
+  return {
+    id: uuid(),
+    fecha_hora: new Date().toISOString(),
+    tecnico: '', codigo_suministro: '', prueba: false,
+    gps_lat: null, gps_lng: null, gps_precision: null,
+    fotos,
+    estado_sistema: '', detalle_completo: '', detalle_incompleto: [], casuistica: '',
+    tension_panel_circuito_abierto: '', tension_bateria: '', capacidad_carga_bateria: '',
+    modelo_bateria: '', tipo_controlador: '', tension_controlador_tomacorriente: '', descarga_data_csv: '',
+    mantenimiento: {},
+    synced: false, sync_error: null
+  };
+}
+
+const MTTO_ITEMS = [
+  { key:'modulo_libre_deterioro', txt:'Módulo SFV', sub:'Libre de signos de deterioro' },
+  { key:'orientacion_norte', txt:'Orientación del módulo SFV', sub:'Orientado al Norte' },
+  { key:'inclinacion', txt:'Inclinación del módulo SFV', sub:'Ángulo de inclinación 15–20°' },
+  { key:'ubicacion_sombras', txt:'Ubicación del módulo SFV', sub:'Libre de sombras' },
+  { key:'pedestal', txt:'Pedestal', sub:'Verticalidad ± 5°' },
+  { key:'controlador_deterioro', txt:'Controlador de carga', sub:'Libre de signos de deterioro' },
+  { key:'tension_entrega', txt:'Nivel de tensión en punto de entrega', sub:'Mayor a 11V en CC y 220V en CA' },
+  { key:'bateria_deterioro', txt:'Batería', sub:'Libre de signos de deterioro' },
+  { key:'cables_uv', txt:'Cables Módulo SFV – Controlador', sub:'Con protección UV' },
+  { key:'cables_instalacion', txt:'Cables de conexión', sub:'Instalados en tubería, adosadas y empotradas' },
+];
+
+function renderMttoList(){
+  const c = document.getElementById('mtto-list');
+  c.innerHTML = MTTO_ITEMS.map(item => `
+    <div class="check-row">
+      <div class="txt">${item.txt}<small>${item.sub}</small></div>
+      <div class="ok-x">
+        <button type="button" class="ok" data-key="${item.key}" data-val="OK">✔</button>
+        <button type="button" class="x" data-key="${item.key}" data-val="X">✕</button>
+      </div>
+    </div>
+  `).join('');
+  c.querySelectorAll('.ok-x button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key, val = btn.dataset.val;
+      form.mantenimiento[key] = val;
+      c.querySelectorAll(`button[data-key="${key}"]`).forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+    });
+  });
+}
+renderMttoList();
+
+/* ---------- Segmented controls (single select) ---------- */
+function bindSeg(id, field, onChange){
+  const wrap = document.getElementById(id);
+  wrap.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const already = btn.classList.contains('sel');
+      wrap.querySelectorAll('button').forEach(b => b.classList.remove('sel'));
+      if (!already){
+        btn.classList.add('sel');
+        form[field] = btn.dataset.val;
+      } else {
+        form[field] = '';
+      }
+      if (onChange) onChange();
+    });
+  });
+}
+
+/* multi-select for detalle_incompleto */
+function bindMultiSeg(id, field){
+  const wrap = document.getElementById(id);
+  wrap.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('sel');
+      const val = btn.dataset.val;
+      const arr = form[field];
+      const idx = arr.indexOf(val);
+      if (idx >= 0) arr.splice(idx,1); else arr.push(val);
+    });
+  });
+}
+
+function updateConditionalPanels(){
+  const wCompleto = document.getElementById('wrap_detalleCompleto');
+  const wIncompleto = document.getElementById('wrap_detalleIncompleto');
+  const wCasuistica = document.getElementById('wrap_casuistica');
+
+  wCompleto.classList.toggle('hidden', form.estado_sistema !== 'COMPLETO');
+  wIncompleto.classList.toggle('hidden', form.estado_sistema !== 'INCOMPLETO');
+
+  const showCasuistica = form.estado_sistema === 'INCOMPLETO' || form.detalle_completo === 'DESINSTALADO';
+  wCasuistica.classList.toggle('hidden', !showCasuistica);
+
+  if (form.estado_sistema !== 'COMPLETO') form.detalle_completo = '';
+  if (form.estado_sistema !== 'INCOMPLETO') form.detalle_incompleto = [];
+  if (!showCasuistica) form.casuistica = '';
+}
+
+bindSeg('seg_estado', 'estado_sistema', updateConditionalPanels);
+bindSeg('seg_detalleCompleto', 'detalle_completo', updateConditionalPanels);
+bindMultiSeg('seg_detalleIncompleto', 'detalle_incompleto');
+bindSeg('seg_casuistica', 'casuistica');
+bindSeg('seg_descargaCsv', 'descarga_data_csv');
+
+/* ---------- GPS ---------- */
+document.getElementById('btnGps').addEventListener('click', () => {
+  if (!navigator.geolocation){ toast('GPS no disponible en este dispositivo'); return; }
+  document.getElementById('gpsText').textContent = 'Obteniendo ubicación…';
+  navigator.geolocation.getCurrentPosition((pos) => {
+    form.gps_lat = pos.coords.latitude;
+    form.gps_lng = pos.coords.longitude;
+    form.gps_precision = pos.coords.accuracy;
+    document.getElementById('gpsText').textContent =
+      `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)} (±${Math.round(pos.coords.accuracy)}m)`;
+  }, (err) => {
+    document.getElementById('gpsText').textContent = 'No se pudo obtener (reintenta con mejor señal GPS)';
+  }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+});
+
+/* ---------- Fotos (compresión local vía canvas — no requiere señal) ---------- */
+function compressImage(dataUrl, maxDim, quality){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDim){ height *= maxDim/width; width = maxDim; }
+      else if (height > maxDim){ width *= maxDim/height; height = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
+function bindPhotoBox(slot){
+  const box = document.getElementById('pbox_' + slot);
+  box.addEventListener('change', (e) => {
+    if (e.target.tagName !== 'INPUT') return;
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      compressImage(reader.result, 1024, 0.7).then(dataUrl => {
+        form.fotos[slot] = dataUrl;
+        box.innerHTML = `<img src="${dataUrl}"><input type="file" accept="image/*" capture="environment">`;
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+PHOTO_SLOTS.forEach(bindPhotoBox);
+
+function resetPhotoBoxes(){
+  PHOTO_SLOTS.forEach(slot => {
+    const box = document.getElementById('pbox_' + slot);
+    box.innerHTML = `<span class="plus">＋</span><input type="file" accept="image/*" capture="environment">`;
+  });
+}
+
+/* ---------- Paso 1 → Paso 2 (pantalla principal = suministro + GPS) ---------- */
+document.getElementById('btnIniciarRegistro').addEventListener('click', () => {
+  const codigo = document.getElementById('f_codigo').value.trim();
+  const tecnico = document.getElementById('f_tecnico').value.trim();
+  if (!codigo){ toast('Falta el código de suministro / sistema'); return; }
+  if (!tecnico){ toast('Falta el nombre/código del técnico'); return; }
+  form.codigo_suministro = codigo;
+  form.tecnico = tecnico;
+  form.prueba = document.getElementById('f_prueba').checked;
+  document.getElementById('resumenCodigo').textContent = codigo + (form.prueba ? '  🧪 PRUEBA' : '');
+  document.getElementById('step-inicio').classList.add('hidden');
+  document.getElementById('step-detalle').classList.remove('hidden');
+  window.scrollTo(0,0);
+});
+
+document.getElementById('btnVolverInicio').addEventListener('click', () => {
+  document.getElementById('step-detalle').classList.add('hidden');
+  document.getElementById('step-inicio').classList.remove('hidden');
+  window.scrollTo(0,0);
+});
+
+/* ---------- Guardar registro ---------- */
+document.getElementById('btnGuardar').addEventListener('click', async () => {
+  form.tension_panel_circuito_abierto = document.getElementById('f_tensPanel').value;
+  form.tension_bateria = document.getElementById('f_tensBateria').value;
+  form.capacidad_carga_bateria = document.getElementById('f_capBateria').value;
+  form.modelo_bateria = document.getElementById('f_modeloBateria').value.trim();
+  form.tipo_controlador = document.getElementById('f_tipoControlador').value.trim();
+  form.tension_controlador_tomacorriente = document.getElementById('f_tensControlador').value;
+
+  if (!form.estado_sistema){ toast('Falta indicar el Estado del Sistema fotovoltaico'); return; }
+
+  form.fecha_hora = new Date().toISOString();
+  form.synced = false;
+  await dbPut(form);
+  toast((form.prueba ? '✔ Registro de PRUEBA guardado' : '✔ Registro guardado') + ' en el celular');
+
+  form = resetForm();
+  document.querySelectorAll('.seg button.sel').forEach(b => b.classList.remove('sel'));
+  document.querySelectorAll('.ok-x button.sel').forEach(b => b.classList.remove('sel'));
+  resetPhotoBoxes();
+  ['f_tecnico','f_codigo','f_tensPanel','f_tensBateria','f_capBateria','f_modeloBateria','f_tipoControlador','f_tensControlador']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_prueba').checked = false;
+  document.getElementById('gpsText').textContent = 'Sin capturar';
+  updateConditionalPanels();
+  refreshCounts();
+
+  document.getElementById('step-detalle').classList.add('hidden');
+  document.getElementById('step-inicio').classList.remove('hidden');
+  window.scrollTo(0,0);
+});
+
+/* ============================================================
+   Listado, contadores, exportación y sincronización
+   ============================================================ */
+
+async function refreshCounts(){
+  const all = await dbAll();
+  const pending = all.filter(r => !r.synced && !r.prueba).length;
+  const synced = all.filter(r => r.synced).length;
+  const prueba = all.filter(r => r.prueba).length;
+  document.getElementById('pillPending').textContent = pending + ' pendientes';
+  document.getElementById('pillSynced').textContent = synced + ' sincronizados';
+  document.getElementById('tabCount').textContent = all.length;
+  document.getElementById('cfg_stats').textContent =
+    `${all.length} registros en el celular · ${pending} por sincronizar · ${synced} ya sincronizados · ${prueba} de prueba`;
+  updateStorageEstimate(all.length);
+  return all;
+}
+
+async function updateStorageEstimate(recordCount){
+  const el = document.getElementById('cfg_storageNote');
+  if (!el) return;
+  try {
+    if (navigator.storage && navigator.storage.estimate){
+      const { usage, quota } = await navigator.storage.estimate();
+      const usageMB = (usage/1024/1024).toFixed(1);
+      const quotaMB = (quota/1024/1024/1024).toFixed(1);
+      el.textContent = `Usando ${usageMB} MB de un espacio disponible de ~${quotaMB} GB en este celular. Esto no depende de tener señal: agregar más fotos por registro solo usa memoria del teléfono, nunca datos móviles.`;
+    } else {
+      el.textContent = 'Cada registro con sus 7 fotos pesa aproximadamente 1–2 MB comprimido. Esto se guarda en la memoria del celular, sin usar señal ni datos móviles.';
+    }
+  } catch(e){
+    el.textContent = 'Cada registro con sus 7 fotos pesa aproximadamente 1–2 MB comprimido, guardado en la memoria del celular sin usar señal.';
+  }
+}
+
+function fotosAdjuntasTexto(r){
+  const labels = { panel:'panel', bateria:'batería', controlador:'controlador',
+    medicionPanel:'medición panel', medicionBateria:'medición batería',
+    medicionTomacorriente:'medición tomacorriente', cablesPvc:'cables PVC' };
+  return PHOTO_SLOTS.filter(s => r.fotos && r.fotos[s]).map(s => labels[s]).join(', ') || 'ninguna';
+}
+
+async function renderRecords(){
+  const all = await refreshCounts();
+  const c = document.getElementById('records-container');
+  if (all.length === 0){
+    c.innerHTML = '<div class="empty">Todavía no hay registros guardados.</div>';
+    return;
+  }
+  c.innerHTML = all.map(r => `
+    <div class="record">
+      <div class="top">
+        <span>${r.codigo_suministro || '(sin código)'}</span>
+        <div class="badges">
+          ${r.prueba ? '<span class="badge prueba">PRUEBA</span>' : ''}
+          <span class="badge ${r.synced ? 'sync' : 'pend'}">${r.synced ? 'SINCRONIZADO' : (r.prueba ? 'NO SE SINCRONIZA' : 'PENDIENTE')}</span>
+        </div>
+      </div>
+      <div class="meta">${new Date(r.fecha_hora).toLocaleString('es-PE')} · Técnico: ${r.tecnico || '—'}</div>
+      <div class="meta">Estado sistema: ${r.estado_sistema || '—'} ${r.gps_lat ? '· GPS ✔' : '· GPS sin capturar'} · Fotos: ${fotosAdjuntasTexto(r)}</div>
+      ${r.sync_error ? `<div class="meta" style="color:var(--rojo)">⚠ ${r.sync_error}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    ['form','list','config'].forEach(name => {
+      document.getElementById('tab-' + name).classList.toggle('hidden', name !== tab.dataset.tab);
+    });
+    if (tab.dataset.tab === 'list') renderRecords();
+    if (tab.dataset.tab === 'config') loadConfig();
+  });
+});
+
+/* ---------- Config (URL de Apps Script) ---------- */
+function loadConfig(){
+  const url = localStorage.getItem('supervision_sync_url') || '';
+  document.getElementById('cfg_url').value = url;
+  refreshCounts();
+}
+document.getElementById('btnSaveCfg').addEventListener('click', () => {
+  const url = document.getElementById('cfg_url').value.trim();
+  localStorage.setItem('supervision_sync_url', url);
+  toast('URL de sincronización guardada');
+});
+
+document.getElementById('btnClearSynced').addEventListener('click', async () => {
+  const all = await dbAll();
+  const toDelete = all.filter(r => r.synced);
+  if (toDelete.length === 0){ toast('No hay registros sincronizados para borrar'); return; }
+  if (!confirm(`¿Borrar ${toDelete.length} registros ya sincronizados del celular? Esto no se puede deshacer.`)) return;
+  for (const r of toDelete) await dbDelete(r.id);
+  toast('Registros sincronizados eliminados del celular');
+  renderRecords();
+});
+
+document.getElementById('btnClearPrueba').addEventListener('click', async () => {
+  const all = await dbAll();
+  const toDelete = all.filter(r => r.prueba);
+  if (toDelete.length === 0){ toast('No hay registros de prueba para borrar'); return; }
+  if (!confirm(`¿Borrar ${toDelete.length} registros de PRUEBA del celular? Esto no se puede deshacer.`)) return;
+  for (const r of toDelete) await dbDelete(r.id);
+  toast('Registros de prueba eliminados del celular');
+  renderRecords();
+});
+
+/* ---------- Exportar Excel local (respaldo, funciona sin señal) ---------- */
+async function exportExcel(){
+  const all = await dbAll();
+  if (all.length === 0){ toast('No hay registros para exportar'); return; }
+
+  const rows = all.map(r => {
+    const row = {
+      'Fecha/Hora': new Date(r.fecha_hora).toLocaleString('es-PE'),
+      'Técnico': r.tecnico,
+      'Código suministro/Sistema': r.codigo_suministro,
+      'Registro de prueba': r.prueba ? 'SI' : 'NO',
+      'GPS Lat': r.gps_lat ?? '',
+      'GPS Lng': r.gps_lng ?? '',
+      'Estado del Sistema fotovoltaico': r.estado_sistema,
+      'Detalle sistema completo': r.detalle_completo,
+      'Detalle sistema incompleto': (r.detalle_incompleto||[]).join(', '),
+      'Casuística': r.casuistica,
+      'Tensión panel circuito abierto (V)': r.tension_panel_circuito_abierto,
+      'Tensión batería (V)': r.tension_bateria,
+      'Capacidad carga batería (AH)': r.capacidad_carga_bateria,
+      'Modelo batería': r.modelo_bateria,
+      'Tipo controlador': r.tipo_controlador,
+      'Tensión controlador tomacorriente (V)': r.tension_controlador_tomacorriente,
+      'Descarga data csv': r.descarga_data_csv,
+    };
+    MTTO_ITEMS.forEach(item => { row[item.txt] = r.mantenimiento[item.key] || ''; });
+    row['Fotos adjuntas'] = fotosAdjuntasTexto(r);
+    row['Sincronizado'] = r.synced ? 'SI' : 'NO';
+    return row;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Supervision SFV');
+  const fname = `Supervision_SFV_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  toast('Excel descargado: ' + fname);
+}
+document.getElementById('btnExport').addEventListener('click', exportExcel);
+document.getElementById('footBtnExport').addEventListener('click', exportExcel);
+
+/* ---------- Sincronización con Google Sheets (Apps Script) ---------- */
+async function syncNow(){
+  const url = localStorage.getItem('supervision_sync_url');
+  if (!url){ toast('Primero configura la URL en Ajustes'); return; }
+  if (!navigator.onLine){ toast('Sin conexión — se sincronizará cuando haya señal'); return; }
+
+  const all = await dbAll();
+  // Los registros de PRUEBA nunca se sincronizan a la Sheet real
+  const pending = all.filter(r => !r.synced && !r.prueba);
+  if (pending.length === 0){ toast('No hay registros pendientes por sincronizar'); return; }
+
+  toast(`Sincronizando ${pending.length} registro(s)…`);
+  let okCount = 0;
+  for (const rec of pending){
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS en Apps Script
+        body: JSON.stringify(rec)
+      });
+      const data = await resp.json().catch(() => ({ ok:true }));
+      if (data && data.ok === false) throw new Error(data.error || 'Error del servidor');
+      rec.synced = true;
+      rec.sync_error = null;
+      await dbPut(rec);
+      okCount++;
+    } catch (err){
+      rec.sync_error = 'Falló el envío, se reintentará';
+      await dbPut(rec);
+    }
+  }
+  toast(`✔ ${okCount} de ${pending.length} registros sincronizados`);
+  renderRecords();
+}
+document.getElementById('btnSyncNow').addEventListener('click', syncNow);
+document.getElementById('footBtnSync').addEventListener('click', syncNow);
+
+/* Auto-sync al recuperar señal */
+window.addEventListener('online', () => { updateOnlinePill(); syncNow(); });
+window.addEventListener('offline', updateOnlinePill);
+
+function updateOnlinePill(){
+  const pill = document.getElementById('pillOnline');
+  if (navigator.onLine){ pill.textContent = 'Con señal'; pill.className = 'pill online'; }
+  else { pill.textContent = 'Sin señal'; pill.className = 'pill offline'; }
+}
+
+/* ---------- Init ---------- */
+(async function init(){
+  db = await openDB();
+  updateOnlinePill();
+  updateConditionalPanels();
+  refreshCounts();
+  if ('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+  // Intento silencioso de sync al abrir la app, si ya hay señal
+  if (navigator.onLine) syncNow();
+})();
+</script>
+</body>
+</html>
