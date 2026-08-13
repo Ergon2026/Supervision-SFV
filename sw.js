@@ -2,7 +2,7 @@
 // Cachea el aplicativo completo (incluida la librería SheetJS) para que funcione
 // sin señal ni datos móviles una vez instalado/abierto la primera vez.
 
-const CACHE_NAME = 'supervision-sfv-v2';
+const CACHE_NAME = 'supervision-sfv-v3';
 const ASSETS = [
   './',
   './index.html',

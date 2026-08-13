@@ -382,6 +382,10 @@
       <button class="btn warn" id="btnClearSynced">Borrar registros ya sincronizados</button>
     </div>
   </div>
+  <div class="card" style="text-align:center;">
+    <div class="hint">Versión del aplicativo instalada en este celular</div>
+    <div style="font-weight:700;color:var(--verde);margin-top:2px;" id="cfg_version">—</div>
+  </div>
 </section>
 
 </main>
@@ -1102,14 +1106,38 @@ function updateOnlinePill(){
 }
 
 /* ---------- Init ---------- */
+const APP_VERSION = '2026-08-13.4'; // súbelo cada vez que publiques cambios — ayuda a confirmar qué versión corre cada celular
+
 (async function init(){
   db = await openDB();
   updateOnlinePill();
   updateConditionalPanels();
   refreshCounts();
+  const vEl = document.getElementById('cfg_version');
+  if (vEl) vEl.textContent = APP_VERSION;
+
   if ('serviceWorker' in navigator){
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Revisa activamente si hay una versión nueva publicada (no espera
+      // a que el navegador lo haga por su cuenta, que puede tardar).
+      reg.update().catch(()=>{});
+    }).catch(()=>{});
+
+    // Antes: cuando se publicaba una actualización, el Service Worker la
+    // instalaba en segundo plano pero la pantalla ya abierta seguía
+    // corriendo con el código viejo hasta cerrar y volver a abrir la app
+    // manualmente — eso generaba confusión ("¿por qué no veo lo nuevo?").
+    // Ahora: en cuanto el navegador activa la versión nueva, la página se
+    // recarga sola una vez, sin que el técnico tenga que hacer nada.
+    let yaRecargando = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (yaRecargando) return;
+      yaRecargando = true;
+      toast('Actualizando a la última versión…', 1500);
+      setTimeout(() => window.location.reload(), 600);
+    });
   }
+
   // Intento silencioso de sync al abrir la app, si ya hay señal
   // (silencioso: si aún no se configuró la URL, no muestra aviso)
   if (navigator.onLine) syncNow(true);
@@ -1119,6 +1147,9 @@ function updateOnlinePill(){
   // del navegador no siempre se dispara aunque sí haya cobertura momentánea.
   setInterval(() => {
     if (navigator.onLine) syncNow(true);
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration){
+      navigator.serviceWorker.getRegistration().then(reg => reg && reg.update().catch(()=>{}));
+    }
   }, 45000);
 })();
 </script>
