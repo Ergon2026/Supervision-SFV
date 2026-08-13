@@ -196,6 +196,7 @@
 
     <div class="card">
       <h2>Fotos generales del equipo</h2>
+      <div class="hint" style="margin-bottom:10px;">Las 3 fotos son obligatorias.</div>
       <div class="photo-row">
         <div class="photo-slot">
           <label>Panel</label>
@@ -267,54 +268,55 @@
 
     <div class="card">
       <h2>2. Indicador de operación</h2>
+      <div class="hint" style="margin-bottom:10px;">Todos los campos y fotos de esta sección son obligatorios.</div>
 
       <div class="field">
-        <label>Tensión del panel en circuito abierto (V)</label>
+        <label class="required">Tensión del panel en circuito abierto (V)</label>
         <input type="number" step="0.01" inputmode="decimal" id="f_tensPanel">
         <div class="photo-inline">
           <div class="photo-box" id="pbox_medicionPanel"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
-          <div class="txt">Foto de la medición (multímetro) en el panel</div>
+          <div class="txt">Foto de la medición (multímetro) en el panel <b>(obligatoria)</b></div>
         </div>
       </div>
 
       <div class="field">
-        <label>Tensión de la batería (V)</label>
+        <label class="required">Tensión de la batería (V)</label>
         <input type="number" step="0.01" inputmode="decimal" id="f_tensBateria">
         <div class="photo-inline">
           <div class="photo-box" id="pbox_medicionBateria"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
-          <div class="txt">Foto de la medición (multímetro) en la batería</div>
+          <div class="txt">Foto de la medición (multímetro) en la batería <b>(obligatoria)</b></div>
         </div>
       </div>
 
       <div class="field">
-        <label>Tipo de batería</label>
+        <label class="required">Tipo de batería</label>
         <input type="text" id="f_tipoBateria" placeholder="Ej: Litio (LiFePO4), AGM, GEL, Plomo-ácido">
       </div>
 
       <div class="field">
-        <label>Capacidad de carga de la batería (AH)</label>
+        <label class="required">Capacidad de carga de la batería (AH)</label>
         <input type="number" step="0.01" inputmode="decimal" id="f_capBateria">
       </div>
       <div class="field">
-        <label>Modelo de la batería</label>
+        <label class="required">Modelo de la batería</label>
         <input type="text" id="f_modeloBateria">
       </div>
       <div class="field">
-        <label>Tipo de controlador</label>
+        <label class="required">Tipo de controlador</label>
         <input type="text" id="f_tipoControlador">
       </div>
 
       <div class="field">
-        <label>Tensión del controlador (tomacorriente) (V)</label>
+        <label class="required">Tensión del controlador (tomacorriente) (V)</label>
         <input type="number" step="0.01" inputmode="decimal" id="f_tensControlador">
         <div class="photo-inline">
           <div class="photo-box" id="pbox_medicionTomacorriente"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
-          <div class="txt">Foto de la medición en el tomacorriente (salida del controlador)</div>
+          <div class="txt">Foto de la medición en el tomacorriente (salida del controlador) <b>(obligatoria)</b></div>
         </div>
       </div>
 
       <div class="field" style="margin-bottom:0;">
-        <label>Descarga de data csv</label>
+        <label class="required">Descarga de data csv</label>
         <div class="seg" id="seg_descargaCsv">
           <button type="button" data-val="SI">SI</button>
           <button type="button" data-val="NO">NO</button>
@@ -324,10 +326,11 @@
 
     <div class="card">
       <h2>3. Indicador de mantenimiento</h2>
+      <div class="hint" style="margin-bottom:10px;">Todos los ítems y la foto de cables son obligatorios.</div>
       <div id="mtto-list"></div>
       <div class="photo-inline" style="margin-top:12px;">
         <div class="photo-box" id="pbox_cablesPvc"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
-        <div class="txt">Foto de los cables con tubería PVC hacia las luminarias</div>
+        <div class="txt">Foto de los cables con tubería PVC hacia las luminarias <b>(obligatoria)</b></div>
       </div>
     </div>
 
@@ -794,6 +797,42 @@ document.getElementById('btnGuardar').addEventListener('click', async () => {
 
   if (!form.estado_sistema){ toast('Falta indicar el Estado del Sistema fotovoltaico'); return; }
 
+  // --- Validación: Indicador de operación (todos obligatorios) ---
+  const camposOperacion = [
+    { valor: form.tension_panel_circuito_abierto, label: 'Tensión del panel en circuito abierto' },
+    { valor: form.tension_bateria, label: 'Tensión de la batería' },
+    { valor: form.tipo_bateria, label: 'Tipo de batería' },
+    { valor: form.capacidad_carga_bateria, label: 'Capacidad de carga de la batería' },
+    { valor: form.modelo_bateria, label: 'Modelo de la batería' },
+    { valor: form.tipo_controlador, label: 'Tipo de controlador' },
+    { valor: form.tension_controlador_tomacorriente, label: 'Tensión del controlador (tomacorriente)' },
+  ];
+  for (const c of camposOperacion){
+    if (c.valor === '' || c.valor === null || c.valor === undefined){
+      toast(`Falta completar: ${c.label}`); return;
+    }
+  }
+  if (!form.descarga_data_csv){ toast('Falta indicar: Descarga de data csv'); return; }
+
+  // --- Validación: las 3 fotos generales + las 3 de medición + cables PVC ---
+  const FOTO_LABELS = {
+    panel: 'Foto del panel', bateria: 'Foto de la batería', controlador: 'Foto del controlador',
+    medicionPanel: 'Foto de la medición del panel', medicionBateria: 'Foto de la medición de la batería',
+    medicionTomacorriente: 'Foto de la medición del tomacorriente', cablesPvc: 'Foto de cables con tubería PVC'
+  };
+  for (const slot of PHOTO_SLOTS){
+    if (!form.fotos[slot]){
+      toast(`Falta adjuntar: ${FOTO_LABELS[slot]}`); return;
+    }
+  }
+
+  // --- Validación: Indicador de mantenimiento (los 10 ítems ✔/✕) ---
+  for (const item of MTTO_ITEMS){
+    if (!form.mantenimiento[item.key]){
+      toast(`Falta marcar ✔ o ✕ en: ${item.txt}`); return;
+    }
+  }
+
   const eraEdicion = !!editingId;
   // Al crear un registro nuevo, la fecha/hora es la del guardado.
   // Al corregir uno ya existente, se conserva la fecha/hora original de
@@ -1106,7 +1145,7 @@ function updateOnlinePill(){
 }
 
 /* ---------- Init ---------- */
-const APP_VERSION = '2026-08-13.4'; // súbelo cada vez que publiques cambios — ayuda a confirmar qué versión corre cada celular
+const APP_VERSION = '2026-08-13.5'; // súbelo cada vez que publiques cambios — ayuda a confirmar qué versión corre cada celular
 
 (async function init(){
   db = await openDB();
