@@ -133,7 +133,7 @@
         <div class="hint">Debe tener exactamente 10 caracteres (ej: 00000456-S)</div>
       </div>
       <div class="field" style="margin-bottom:0;">
-        <label>Ubicación GPS</label>
+        <label class="required">Ubicación GPS</label>
         <div class="gps-box">
           <span id="gpsText" style="flex:1;">Sin capturar</span>
           <button type="button" id="btnGps">Capturar</button>
@@ -144,21 +144,21 @@
     </div>
 
     <div class="card">
-      <h2 style="margin-bottom:10px;">Ubicación administrativa</h2>
+      <h2 style="margin-bottom:10px;">Ubicación</h2>
       <div class="field">
-        <label>Departamento</label>
+        <label class="required">Departamento</label>
         <input type="text" id="f_departamento" placeholder="Ej: Loreto">
       </div>
       <div class="field">
-        <label>Provincia</label>
+        <label class="required">Provincia</label>
         <input type="text" id="f_provincia" placeholder="Ej: Maynas">
       </div>
       <div class="field">
-        <label>Distrito</label>
+        <label class="required">Distrito</label>
         <input type="text" id="f_distrito" placeholder="Ej: Punchana">
       </div>
       <div class="field" style="margin-bottom:0;">
-        <label>Localidad</label>
+        <label class="required">Localidad</label>
         <input type="text" id="f_localidad" placeholder="Ej: San Juan de Miraflores">
       </div>
     </div>
@@ -675,16 +675,27 @@ function resetPhotoBoxes(){
 document.getElementById('btnIniciarRegistro').addEventListener('click', () => {
   const codigo = document.getElementById('f_codigo').value.trim().toUpperCase();
   const tecnico = document.getElementById('f_tecnico').value.trim();
+  const departamento = document.getElementById('f_departamento').value.trim();
+  const provincia = document.getElementById('f_provincia').value.trim();
+  const distrito = document.getElementById('f_distrito').value.trim();
+  const localidad = document.getElementById('f_localidad').value.trim();
+
   if (!codigo){ toast('Falta el código de suministro / sistema'); return; }
   if (codigo.length !== 10){ toast(`El código debe tener exactamente 10 caracteres (tiene ${codigo.length}). Ej: 00000456-S`); return; }
   if (!tecnico){ toast('Falta el nombre/código del técnico'); return; }
+  if (form.gps_lat === null || form.gps_lng === null){ toast('Falta capturar la ubicación GPS (toca "Capturar")'); return; }
+  if (!departamento){ toast('Falta completar: Departamento'); return; }
+  if (!provincia){ toast('Falta completar: Provincia'); return; }
+  if (!distrito){ toast('Falta completar: Distrito'); return; }
+  if (!localidad){ toast('Falta completar: Localidad'); return; }
+
   form.codigo_suministro = codigo;
   form.tecnico = tecnico;
   form.prueba = document.getElementById('f_prueba').checked;
-  form.departamento = document.getElementById('f_departamento').value.trim();
-  form.provincia = document.getElementById('f_provincia').value.trim();
-  form.distrito = document.getElementById('f_distrito').value.trim();
-  form.localidad = document.getElementById('f_localidad').value.trim();
+  form.departamento = departamento;
+  form.provincia = provincia;
+  form.distrito = distrito;
+  form.localidad = localidad;
   document.getElementById('resumenCodigo').textContent = codigo + (form.prueba ? '  🧪 PRUEBA' : '') + (editingId ? '  ✏️ EDITANDO' : '');
   document.getElementById('step-inicio').classList.add('hidden');
   document.getElementById('step-detalle').classList.remove('hidden');
@@ -1145,7 +1156,7 @@ function updateOnlinePill(){
 }
 
 /* ---------- Init ---------- */
-const APP_VERSION = '2026-08-13.5'; // súbelo cada vez que publiques cambios — ayuda a confirmar qué versión corre cada celular
+const APP_VERSION = '2026-08-13.6'; // súbelo cada vez que publiques cambios — ayuda a confirmar qué versión corre cada celular
 
 (async function init(){
   db = await openDB();

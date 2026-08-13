@@ -2,7 +2,12 @@
 // Cachea el aplicativo completo (incluida la librería SheetJS) para que funcione
 // sin señal ni datos móviles una vez instalado/abierto la primera vez.
 
-const CACHE_NAME = 'supervision-sfv-v3';
+// IMPORTANTE: subir este número en TODA entrega nueva, aunque el cambio
+// real haya sido solo en index.html. El navegador solo detecta que hay
+// una versión nueva del Service Worker comparando este archivo byte por
+// byte — si sw.js queda idéntico, nunca se entera de que index.html
+// cambió, y sigue sirviendo la copia vieja desde caché indefinidamente.
+const CACHE_NAME = 'supervision-sfv-v4';
 const ASSETS = [
   './',
   './index.html',
