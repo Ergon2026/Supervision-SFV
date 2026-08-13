@@ -166,7 +166,31 @@ function getSheet_() {
     sheet.appendRow(HEADERS);
     sheet.setFrozenRows(1);
   }
+  actualizarEncabezados_(sheet);
   return sheet;
+}
+
+/**
+ * Mantiene la fila 1 (encabezados) siempre igual a HEADERS, incluso si el
+ * código se actualizó después de que la Sheet ya tenía datos. Sin esto,
+ * agregar un campo nuevo deja los encabezados viejos mientras las filas
+ * nuevas ya traen columnas de más, desalineando todo.
+ *
+ * IMPORTANTE para futuras modificaciones: los campos nuevos SIEMPRE deben
+ * agregarse al FINAL del arreglo HEADERS (y al final del arreglo en
+ * sheet.appendRow(...) dentro de procesarRegistro_), nunca insertarse en
+ * medio. Insertar en medio corre de lugar todas las columnas siguientes
+ * para las filas nuevas, mientras las filas ya guardadas mantienen el
+ * orden viejo — eso es lo que causó el desalineamiento actual.
+ */
+function actualizarEncabezados_(sheet) {
+  const rango = sheet.getRange(1, 1, 1, HEADERS.length);
+  const actuales = rango.getValues()[0];
+  const igual = HEADERS.every((h, i) => actuales[i] === h);
+  if (!igual) {
+    rango.setValues([HEADERS]);
+    sheet.setFrozenRows(1);
+  }
 }
 
 function getFolder_() {
