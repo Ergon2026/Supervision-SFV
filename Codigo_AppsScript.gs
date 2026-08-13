@@ -27,9 +27,10 @@ const DRIVE_FOLDER_ID = '';
 
 const HEADERS = [
   'ID', 'Fecha/Hora recibido', 'Fecha/Hora registro', 'Técnico', 'Código suministro/Sistema', 'Registro de prueba',
-  'GPS Lat', 'GPS Lng', 'GPS Precisión (m)',
+  'GPS Lat', 'GPS Lng', 'GPS Margen de error (m)',
+  'Departamento', 'Provincia', 'Distrito', 'Localidad',
   'Estado del Sistema fotovoltaico', 'Detalle sistema completo', 'Detalle sistema incompleto', 'Casuística',
-  'Tensión panel circuito abierto (V)', 'Tensión batería (V)', 'Capacidad carga batería (AH)',
+  'Tensión panel circuito abierto (V)', 'Tensión batería (V)', 'Tipo batería', 'Capacidad carga batería (AH)',
   'Modelo batería', 'Tipo controlador', 'Tensión controlador tomacorriente (V)', 'Descarga data csv',
   'Módulo SFV libre deterioro', 'Orientación Norte', 'Inclinación 15-20°', 'Ubicación libre sombras',
   'Pedestal verticalidad', 'Controlador libre deterioro', 'Tensión punto entrega', 'Batería libre deterioro',
@@ -39,6 +40,16 @@ const HEADERS = [
 ];
 
 function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000); // evita que dos envíos simultáneos (dos celulares a la vez) pisen la misma fila
+  try {
+    return procesarRegistro_(e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function procesarRegistro_(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     const sheet = getSheet_();
@@ -49,6 +60,14 @@ function doPost(e) {
     // se rechazan también en el backend si alguno llegara a enviarse.
     if (body.prueba === true) {
       return ContentService.createTextOutput(JSON.stringify({ ok: true, skipped: 'registro de prueba, no se guarda' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Protección contra duplicados: si este ID ya existe en la Sheet
+    // (por ejemplo, por una doble sincronización desde el celular),
+    // no se vuelve a insertar la fila.
+    if (body.id && yaExisteId_(sheet, body.id)) {
+      return ContentService.createTextOutput(JSON.stringify({ ok: true, skipped: 'ID ya registrado, evitado duplicado' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -72,12 +91,17 @@ function doPost(e) {
       body.gps_lat || '',
       body.gps_lng || '',
       body.gps_precision || '',
+      body.departamento || '',
+      body.provincia || '',
+      body.distrito || '',
+      body.localidad || '',
       body.estado_sistema || '',
       body.detalle_completo || '',
       (body.detalle_incompleto || []).join(', '),
       body.casuistica || '',
       body.tension_panel_circuito_abierto || '',
       body.tension_bateria || '',
+      body.tipo_bateria || '',
       body.capacidad_carga_bateria || '',
       body.modelo_bateria || '',
       body.tipo_controlador || '',
@@ -114,6 +138,18 @@ function doPost(e) {
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({ ok: true, status: 'Backend Supervisión SFV activo' }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Revisa si un ID de registro ya existe en la columna A de la Sheet,
+ * para no insertar la misma fila dos veces si llegara a reintentarse
+ * un envío (doble sincronización, corte de señal a mitad de envío, etc.).
+ */
+function yaExisteId_(sheet, id) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return false;
+  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+  return ids.indexOf(id) !== -1;
 }
 
 function getSheet_() {

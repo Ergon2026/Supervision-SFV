@@ -2,14 +2,15 @@
 // Cachea el aplicativo completo (incluida la librería SheetJS) para que funcione
 // sin señal ni datos móviles una vez instalado/abierto la primera vez.
 
-const CACHE_NAME = 'supervision-sfv-v1';
+const CACHE_NAME = 'supervision-sfv-v2';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './vendor/xlsx.full.min.js'
+  './vendor/xlsx.full.min.js',
+  './vendor/jszip.min.js'
 ];
 
 self.addEventListener('install', (event) => {

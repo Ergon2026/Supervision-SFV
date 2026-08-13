@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
 <style>
   :root{
     --verde:#0f4c3a; --verde-claro:#1a6b52; --amarillo:#f0c419;
@@ -128,7 +129,8 @@
     <div class="card">
       <div class="field">
         <label class="required">Código de suministro / Sistema</label>
-        <input type="text" id="f_codigo" placeholder="Ej: RER1-0001234" autofocus>
+        <input type="text" id="f_codigo" placeholder="Ej: 00000456-S" maxlength="10" autofocus>
+        <div class="hint">Debe tener exactamente 10 caracteres (ej: 00000456-S)</div>
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>Ubicación GPS</label>
@@ -136,6 +138,28 @@
           <span id="gpsText" style="flex:1;">Sin capturar</span>
           <button type="button" id="btnGps">Capturar</button>
         </div>
+        <div class="hint">Funciona sin señal (usa satélites GPS, no datos móviles). Sin señal el primer punto puede tardar un poco más en aparecer.</div>
+        <div id="gpsAccuracyNote" class="hidden" style="margin-top:6px;font-size:12px;font-weight:600;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom:10px;">Ubicación administrativa</h2>
+      <div class="field">
+        <label>Departamento</label>
+        <input type="text" id="f_departamento" placeholder="Ej: Loreto">
+      </div>
+      <div class="field">
+        <label>Provincia</label>
+        <input type="text" id="f_provincia" placeholder="Ej: Maynas">
+      </div>
+      <div class="field">
+        <label>Distrito</label>
+        <input type="text" id="f_distrito" placeholder="Ej: Punchana">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>Localidad</label>
+        <input type="text" id="f_localidad" placeholder="Ej: San Juan de Miraflores">
       </div>
     </div>
 
@@ -245,6 +269,11 @@
       </div>
 
       <div class="field">
+        <label>Tipo de batería</label>
+        <input type="text" id="f_tipoBateria" placeholder="Ej: Litio (LiFePO4), AGM, GEL, Plomo-ácido">
+      </div>
+
+      <div class="field">
         <label>Capacidad de carga de la batería (AH)</label>
         <input type="number" step="0.01" inputmode="decimal" id="f_capBateria">
       </div>
@@ -297,8 +326,10 @@
 <section id="tab-list" class="hidden">
   <div class="card" style="padding:10px 14px;">
     <div class="btn-row">
-      <button class="btn secondary" id="btnExport">⬇ Exportar Excel (respaldo)</button>
+      <button class="btn secondary" id="btnExport">⬇ Excel (datos)</button>
+      <button class="btn secondary" id="btnExportZip">⬇ Fotos (ZIP)</button>
     </div>
+    <div class="hint" style="margin-top:8px;">Ambos funcionan sin señal. Úsalos como respaldo completo si no logras sincronizar en campo.</div>
   </div>
   <div id="records-container"></div>
 </section>
@@ -427,9 +458,10 @@ function resetForm(){
     fecha_hora: new Date().toISOString(),
     tecnico: '', codigo_suministro: '', prueba: false,
     gps_lat: null, gps_lng: null, gps_precision: null,
+    departamento: '', provincia: '', distrito: '', localidad: '',
     fotos,
     estado_sistema: '', detalle_completo: '', detalle_incompleto: [], casuistica: '',
-    tension_panel_circuito_abierto: '', tension_bateria: '', capacidad_carga_bateria: '',
+    tension_panel_circuito_abierto: '', tension_bateria: '', tipo_bateria: '', capacidad_carga_bateria: '',
     modelo_bateria: '', tipo_controlador: '', tension_controlador_tomacorriente: '', descarga_data_csv: '',
     mantenimiento: {},
     synced: false, sync_error: null
@@ -528,16 +560,30 @@ bindSeg('seg_descargaCsv', 'descarga_data_csv');
 /* ---------- GPS ---------- */
 document.getElementById('btnGps').addEventListener('click', () => {
   if (!navigator.geolocation){ toast('GPS no disponible en este dispositivo'); return; }
-  document.getElementById('gpsText').textContent = 'Obteniendo ubicación…';
+  document.getElementById('gpsText').textContent = 'Obteniendo ubicación… (puede tardar más sin señal)';
+  const noteEl = document.getElementById('gpsAccuracyNote');
+  noteEl.classList.add('hidden');
   navigator.geolocation.getCurrentPosition((pos) => {
     form.gps_lat = pos.coords.latitude;
     form.gps_lng = pos.coords.longitude;
     form.gps_precision = pos.coords.accuracy;
+    const acc = Math.round(pos.coords.accuracy);
     document.getElementById('gpsText').textContent =
-      `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)} (±${Math.round(pos.coords.accuracy)}m)`;
+      `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+    noteEl.classList.remove('hidden');
+    if (acc <= 15){
+      noteEl.style.color = 'var(--verde)';
+      noteEl.textContent = `✔ Margen de error: ±${acc} m (buena precisión)`;
+    } else if (acc <= 50){
+      noteEl.style.color = 'var(--naranja)';
+      noteEl.textContent = `⚠ Margen de error: ±${acc} m (precisión media — puedes registrar así o reintentar en espacio abierto)`;
+    } else {
+      noteEl.style.color = 'var(--rojo)';
+      noteEl.textContent = `⚠ Margen de error: ±${acc} m (precisión baja — puedes registrar así, pero conviene reintentar cerca de una ventana o espacio abierto)`;
+    }
   }, (err) => {
-    document.getElementById('gpsText').textContent = 'No se pudo obtener (reintenta con mejor señal GPS)';
-  }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+    document.getElementById('gpsText').textContent = 'No se pudo obtener (reintenta con mejor vista al cielo)';
+  }, { enableHighAccuracy:true, timeout:20000, maximumAge:0 });
 });
 
 /* ---------- Fotos (compresión local vía canvas — no requiere señal) ---------- */
@@ -584,13 +630,18 @@ function resetPhotoBoxes(){
 
 /* ---------- Paso 1 → Paso 2 (pantalla principal = suministro + GPS) ---------- */
 document.getElementById('btnIniciarRegistro').addEventListener('click', () => {
-  const codigo = document.getElementById('f_codigo').value.trim();
+  const codigo = document.getElementById('f_codigo').value.trim().toUpperCase();
   const tecnico = document.getElementById('f_tecnico').value.trim();
   if (!codigo){ toast('Falta el código de suministro / sistema'); return; }
+  if (codigo.length !== 10){ toast(`El código debe tener exactamente 10 caracteres (tiene ${codigo.length}). Ej: 00000456-S`); return; }
   if (!tecnico){ toast('Falta el nombre/código del técnico'); return; }
   form.codigo_suministro = codigo;
   form.tecnico = tecnico;
   form.prueba = document.getElementById('f_prueba').checked;
+  form.departamento = document.getElementById('f_departamento').value.trim();
+  form.provincia = document.getElementById('f_provincia').value.trim();
+  form.distrito = document.getElementById('f_distrito').value.trim();
+  form.localidad = document.getElementById('f_localidad').value.trim();
   document.getElementById('resumenCodigo').textContent = codigo + (form.prueba ? '  🧪 PRUEBA' : '');
   document.getElementById('step-inicio').classList.add('hidden');
   document.getElementById('step-detalle').classList.remove('hidden');
@@ -607,6 +658,7 @@ document.getElementById('btnVolverInicio').addEventListener('click', () => {
 document.getElementById('btnGuardar').addEventListener('click', async () => {
   form.tension_panel_circuito_abierto = document.getElementById('f_tensPanel').value;
   form.tension_bateria = document.getElementById('f_tensBateria').value;
+  form.tipo_bateria = document.getElementById('f_tipoBateria').value.trim();
   form.capacidad_carga_bateria = document.getElementById('f_capBateria').value;
   form.modelo_bateria = document.getElementById('f_modeloBateria').value.trim();
   form.tipo_controlador = document.getElementById('f_tipoControlador').value.trim();
@@ -623,10 +675,12 @@ document.getElementById('btnGuardar').addEventListener('click', async () => {
   document.querySelectorAll('.seg button.sel').forEach(b => b.classList.remove('sel'));
   document.querySelectorAll('.ok-x button.sel').forEach(b => b.classList.remove('sel'));
   resetPhotoBoxes();
-  ['f_tecnico','f_codigo','f_tensPanel','f_tensBateria','f_capBateria','f_modeloBateria','f_tipoControlador','f_tensControlador']
+  ['f_tecnico','f_codigo','f_departamento','f_provincia','f_distrito','f_localidad',
+   'f_tensPanel','f_tensBateria','f_tipoBateria','f_capBateria','f_modeloBateria','f_tipoControlador','f_tensControlador']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('f_prueba').checked = false;
   document.getElementById('gpsText').textContent = 'Sin capturar';
+  document.getElementById('gpsAccuracyNote').classList.add('hidden');
   updateConditionalPanels();
   refreshCounts();
 
@@ -758,12 +812,18 @@ async function exportExcel(){
       'Registro de prueba': r.prueba ? 'SI' : 'NO',
       'GPS Lat': r.gps_lat ?? '',
       'GPS Lng': r.gps_lng ?? '',
+      'GPS Margen de error (m)': r.gps_precision ? Math.round(r.gps_precision) : '',
+      'Departamento': r.departamento || '',
+      'Provincia': r.provincia || '',
+      'Distrito': r.distrito || '',
+      'Localidad': r.localidad || '',
       'Estado del Sistema fotovoltaico': r.estado_sistema,
       'Detalle sistema completo': r.detalle_completo,
       'Detalle sistema incompleto': (r.detalle_incompleto||[]).join(', '),
       'Casuística': r.casuistica,
       'Tensión panel circuito abierto (V)': r.tension_panel_circuito_abierto,
       'Tensión batería (V)': r.tension_bateria,
+      'Tipo batería': r.tipo_bateria || '',
       'Capacidad carga batería (AH)': r.capacidad_carga_bateria,
       'Modelo batería': r.modelo_bateria,
       'Tipo controlador': r.tipo_controlador,
@@ -786,39 +846,90 @@ async function exportExcel(){
 document.getElementById('btnExport').addEventListener('click', exportExcel);
 document.getElementById('footBtnExport').addEventListener('click', exportExcel);
 
+/* ---------- Exportar fotos en ZIP (respaldo local, funciona sin señal) ---------- */
+async function exportZip(){
+  const all = await dbAll();
+  const conFotos = all.filter(r => r.fotos && PHOTO_SLOTS.some(s => r.fotos[s]));
+  if (conFotos.length === 0){ toast('No hay fotos guardadas para exportar'); return; }
+
+  toast('Preparando ZIP de fotos…');
+  const labels = { panel:'panel', bateria:'bateria', controlador:'controlador',
+    medicionPanel:'medicion_panel', medicionBateria:'medicion_bateria',
+    medicionTomacorriente:'medicion_tomacorriente', cablesPvc:'cables_pvc' };
+
+  const zip = new JSZip();
+  conFotos.forEach(r => {
+    const fecha = new Date(r.fecha_hora).toISOString().slice(0,10);
+    const carpeta = `${(r.codigo_suministro || 'sin_codigo')}_${fecha}_${r.id.slice(0,8)}`;
+    PHOTO_SLOTS.forEach(slot => {
+      const dataUrl = r.fotos[slot];
+      if (!dataUrl) return;
+      const base64 = dataUrl.split('base64,')[1];
+      if (!base64) return;
+      zip.file(`${carpeta}/${labels[slot]}.jpg`, base64, { base64: true });
+    });
+  });
+
+  try {
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Fotos_Supervision_SFV_${new Date().toISOString().slice(0,10)}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast(`✔ ZIP descargado con fotos de ${conFotos.length} registro(s)`);
+  } catch (err){
+    toast('No se pudo generar el ZIP: ' + err.message);
+  }
+}
+document.getElementById('btnExportZip').addEventListener('click', exportZip);
+
 /* ---------- Sincronización con Google Sheets (Apps Script) ---------- */
+let isSyncing = false; // evita que dos sincronizaciones corran al mismo tiempo (causa de duplicados)
+
 async function syncNow(){
+  if (isSyncing){ toast('Ya hay una sincronización en curso…'); return; }
   const url = localStorage.getItem('supervision_sync_url');
   if (!url){ toast('Primero configura la URL en Ajustes'); return; }
   if (!navigator.onLine){ toast('Sin conexión — se sincronizará cuando haya señal'); return; }
 
-  const all = await dbAll();
-  // Los registros de PRUEBA nunca se sincronizan a la Sheet real
-  const pending = all.filter(r => !r.synced && !r.prueba);
-  if (pending.length === 0){ toast('No hay registros pendientes por sincronizar'); return; }
+  isSyncing = true;
+  try {
+    const all = await dbAll();
+    // Los registros de PRUEBA nunca se sincronizan a la Sheet real
+    const pending = all.filter(r => !r.synced && !r.prueba);
+    if (pending.length === 0){ toast('No hay registros pendientes por sincronizar'); return; }
 
-  toast(`Sincronizando ${pending.length} registro(s)…`);
-  let okCount = 0;
-  for (const rec of pending){
-    try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS en Apps Script
-        body: JSON.stringify(rec)
-      });
-      const data = await resp.json().catch(() => ({ ok:true }));
-      if (data && data.ok === false) throw new Error(data.error || 'Error del servidor');
-      rec.synced = true;
-      rec.sync_error = null;
-      await dbPut(rec);
-      okCount++;
-    } catch (err){
-      rec.sync_error = 'Falló el envío, se reintentará';
-      await dbPut(rec);
+    toast(`Sincronizando ${pending.length} registro(s)…`);
+    let okCount = 0;
+    for (const rec of pending){
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS en Apps Script
+          body: JSON.stringify(rec)
+        });
+        const data = await resp.json().catch(() => ({ ok:true }));
+        if (data && data.ok === false) throw new Error(data.error || 'Error del servidor');
+        // Se marca sincronizado ANTES de continuar con el siguiente registro,
+        // así una segunda sincronización (manual o automática) nunca reenvía este.
+        rec.synced = true;
+        rec.sync_error = null;
+        await dbPut(rec);
+        okCount++;
+      } catch (err){
+        rec.sync_error = 'Falló el envío, se reintentará';
+        await dbPut(rec);
+      }
     }
+    toast(`✔ ${okCount} de ${pending.length} registros sincronizados`);
+    renderRecords();
+  } finally {
+    isSyncing = false;
   }
-  toast(`✔ ${okCount} de ${pending.length} registros sincronizados`);
-  renderRecords();
 }
 document.getElementById('btnSyncNow').addEventListener('click', syncNow);
 document.getElementById('footBtnSync').addEventListener('click', syncNow);
