@@ -248,6 +248,24 @@
     </div>
 
     <div class="card">
+      <h2>Estado del panel</h2>
+      <div class="field">
+        <label class="required">Estado del Panel</label>
+        <div class="seg" id="seg_estadoPanel">
+          <button type="button" data-val="INSTALADO">INSTALADO</button>
+          <button type="button" data-val="FUERA DEL RACK">FUERA DEL RACK</button>
+        </div>
+      </div>
+      <div class="field hidden" id="wrap_casuisticaPanel" style="margin-bottom:0;">
+        <label>Casuística (panel)</label>
+        <div class="seg" id="seg_casuisticaPanel">
+          <button type="button" data-val="VANDALISMO">VANDALISMO</button>
+          <button type="button" data-val="SINIESTRO">SINIESTRO</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>2. Indicador de operación</h2>
 
       <div class="field">
@@ -461,6 +479,7 @@ function resetForm(){
     departamento: '', provincia: '', distrito: '', localidad: '',
     fotos,
     estado_sistema: '', detalle_completo: '', detalle_incompleto: [], casuistica: '',
+    estado_panel: '', casuistica_panel: '',
     tension_panel_circuito_abierto: '', tension_bateria: '', tipo_bateria: '', capacidad_carga_bateria: '',
     modelo_bateria: '', tipo_controlador: '', tension_controlador_tomacorriente: '', descarga_data_csv: '',
     mantenimiento: {},
@@ -549,12 +568,19 @@ function updateConditionalPanels(){
   if (form.estado_sistema !== 'COMPLETO') form.detalle_completo = '';
   if (form.estado_sistema !== 'INCOMPLETO') form.detalle_incompleto = [];
   if (!showCasuistica) form.casuistica = '';
+
+  const wCasuisticaPanel = document.getElementById('wrap_casuisticaPanel');
+  const showCasuisticaPanel = form.estado_panel === 'FUERA DEL RACK';
+  wCasuisticaPanel.classList.toggle('hidden', !showCasuisticaPanel);
+  if (!showCasuisticaPanel) form.casuistica_panel = '';
 }
 
 bindSeg('seg_estado', 'estado_sistema', updateConditionalPanels);
 bindSeg('seg_detalleCompleto', 'detalle_completo', updateConditionalPanels);
 bindMultiSeg('seg_detalleIncompleto', 'detalle_incompleto');
 bindSeg('seg_casuistica', 'casuistica');
+bindSeg('seg_estadoPanel', 'estado_panel', updateConditionalPanels);
+bindSeg('seg_casuisticaPanel', 'casuistica_panel');
 bindSeg('seg_descargaCsv', 'descarga_data_csv');
 
 /* ---------- GPS ---------- */
@@ -773,10 +799,24 @@ function loadConfig(){
   document.getElementById('cfg_url').value = url;
   refreshCounts();
 }
-document.getElementById('btnSaveCfg').addEventListener('click', () => {
+document.getElementById('btnSaveCfg').addEventListener('click', async () => {
   const url = document.getElementById('cfg_url').value.trim();
   localStorage.setItem('supervision_sync_url', url);
-  toast('URL de sincronización guardada');
+  if (!url){ toast('URL borrada'); return; }
+  toast('URL guardada, probando conexión…');
+  try {
+    const resp = await fetch(url, { method: 'GET' });
+    const data = await resp.json().catch(() => null);
+    if (!data || data.ok !== true) throw new Error('Respuesta inesperada del backend');
+    toast('✔ Conexión con el backend correcta');
+  } catch (err){
+    toast('⚠ Se guardó la URL, pero no se pudo confirmar la conexión ahora. Se reintentará al sincronizar.');
+  }
+  // Si ya había registros guardados en el celular antes de configurar la URL
+  // (por ejemplo, se instaló la app sin tener aún el backend listo), se
+  // sincronizan de inmediato en vez de esperar a la próxima vez que se
+  // abra la app o recupere señal.
+  syncNow();
 });
 
 document.getElementById('btnClearSynced').addEventListener('click', async () => {
@@ -821,6 +861,8 @@ async function exportExcel(){
       'Detalle sistema completo': r.detalle_completo,
       'Detalle sistema incompleto': (r.detalle_incompleto||[]).join(', '),
       'Casuística': r.casuistica,
+      'Estado del Panel': r.estado_panel || '',
+      'Casuística (panel)': r.casuistica_panel || '',
       'Tensión panel circuito abierto (V)': r.tension_panel_circuito_abierto,
       'Tensión batería (V)': r.tension_bateria,
       'Tipo batería': r.tipo_bateria || '',
@@ -890,11 +932,11 @@ document.getElementById('btnExportZip').addEventListener('click', exportZip);
 /* ---------- Sincronización con Google Sheets (Apps Script) ---------- */
 let isSyncing = false; // evita que dos sincronizaciones corran al mismo tiempo (causa de duplicados)
 
-async function syncNow(){
-  if (isSyncing){ toast('Ya hay una sincronización en curso…'); return; }
+async function syncNow(silent=false){
+  if (isSyncing){ if (!silent) toast('Ya hay una sincronización en curso…'); return; }
   const url = localStorage.getItem('supervision_sync_url');
-  if (!url){ toast('Primero configura la URL en Ajustes'); return; }
-  if (!navigator.onLine){ toast('Sin conexión — se sincronizará cuando haya señal'); return; }
+  if (!url){ if (!silent) toast('Primero configura la URL en Ajustes'); return; }
+  if (!navigator.onLine){ if (!silent) toast('Sin conexión — se sincronizará cuando haya señal'); return; }
 
   isSyncing = true;
   try {
@@ -954,7 +996,8 @@ function updateOnlinePill(){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   }
   // Intento silencioso de sync al abrir la app, si ya hay señal
-  if (navigator.onLine) syncNow();
+  // (silencioso: si aún no se configuró la URL, no muestra aviso)
+  if (navigator.onLine) syncNow(true);
 })();
 </script>
 </body>
