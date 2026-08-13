@@ -431,6 +431,15 @@ function dbAll(){
   });
 }
 
+function dbGet(id){
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = (e) => reject(e);
+  });
+}
+
 function dbPut(record){
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
@@ -468,6 +477,7 @@ function toast(msg, ms=2600){
 const PHOTO_SLOTS = ['panel','bateria','controlador','medicionPanel','medicionBateria','medicionTomacorriente','cablesPvc'];
 
 let form = resetForm();
+let editingId = null; // null = registro nuevo; si tiene un id, se está corrigiendo un registro ya guardado
 function resetForm(){
   const fotos = {};
   PHOTO_SLOTS.forEach(s => fotos[s] = null);
@@ -668,7 +678,7 @@ document.getElementById('btnIniciarRegistro').addEventListener('click', () => {
   form.provincia = document.getElementById('f_provincia').value.trim();
   form.distrito = document.getElementById('f_distrito').value.trim();
   form.localidad = document.getElementById('f_localidad').value.trim();
-  document.getElementById('resumenCodigo').textContent = codigo + (form.prueba ? '  🧪 PRUEBA' : '');
+  document.getElementById('resumenCodigo').textContent = codigo + (form.prueba ? '  🧪 PRUEBA' : '') + (editingId ? '  ✏️ EDITANDO' : '');
   document.getElementById('step-inicio').classList.add('hidden');
   document.getElementById('step-detalle').classList.remove('hidden');
   window.scrollTo(0,0);
@@ -679,6 +689,94 @@ document.getElementById('btnVolverInicio').addEventListener('click', () => {
   document.getElementById('step-inicio').classList.remove('hidden');
   window.scrollTo(0,0);
 });
+
+/* ---------- Editar un registro ya guardado (corregir equivocaciones) ---------- */
+function setSegSeleccion_(id, value){
+  document.querySelectorAll(`#${id} button`).forEach(b => b.classList.toggle('sel', b.dataset.val === value));
+}
+
+function poblarUIConForm_(){
+  document.getElementById('f_codigo').value = form.codigo_suministro || '';
+  document.getElementById('f_tecnico').value = form.tecnico || '';
+  document.getElementById('f_prueba').checked = !!form.prueba;
+  document.getElementById('f_departamento').value = form.departamento || '';
+  document.getElementById('f_provincia').value = form.provincia || '';
+  document.getElementById('f_distrito').value = form.distrito || '';
+  document.getElementById('f_localidad').value = form.localidad || '';
+
+  const gpsTextEl = document.getElementById('gpsText');
+  const gpsNoteEl = document.getElementById('gpsAccuracyNote');
+  if (form.gps_lat != null && form.gps_lng != null){
+    gpsTextEl.textContent = `${form.gps_lat.toFixed(6)}, ${form.gps_lng.toFixed(6)}`;
+    if (form.gps_precision != null){
+      const acc = Math.round(form.gps_precision);
+      gpsNoteEl.classList.remove('hidden');
+      if (acc <= 15){ gpsNoteEl.style.color = 'var(--verde)'; gpsNoteEl.textContent = `✔ Margen de error: ±${acc} m (buena precisión)`; }
+      else if (acc <= 50){ gpsNoteEl.style.color = 'var(--naranja)'; gpsNoteEl.textContent = `⚠ Margen de error: ±${acc} m (precisión media)`; }
+      else { gpsNoteEl.style.color = 'var(--rojo)'; gpsNoteEl.textContent = `⚠ Margen de error: ±${acc} m (precisión baja)`; }
+    } else {
+      gpsNoteEl.classList.add('hidden');
+    }
+  } else {
+    gpsTextEl.textContent = 'Sin capturar';
+    gpsNoteEl.classList.add('hidden');
+  }
+
+  setSegSeleccion_('seg_estado', form.estado_sistema);
+  setSegSeleccion_('seg_detalleCompleto', form.detalle_completo);
+  setSegSeleccion_('seg_casuistica', form.casuistica);
+  setSegSeleccion_('seg_estadoPanel', form.estado_panel);
+  setSegSeleccion_('seg_casuisticaPanel', form.casuistica_panel);
+  setSegSeleccion_('seg_descargaCsv', form.descarga_data_csv);
+
+  document.querySelectorAll('#seg_detalleIncompleto button').forEach(b => {
+    b.classList.toggle('sel', (form.detalle_incompleto || []).includes(b.dataset.val));
+  });
+
+  document.querySelectorAll('#mtto-list .ok-x button').forEach(b => {
+    b.classList.toggle('sel', form.mantenimiento && form.mantenimiento[b.dataset.key] === b.dataset.val);
+  });
+
+  document.getElementById('f_tensPanel').value = form.tension_panel_circuito_abierto || '';
+  document.getElementById('f_tensBateria').value = form.tension_bateria || '';
+  document.getElementById('f_tipoBateria').value = form.tipo_bateria || '';
+  document.getElementById('f_capBateria').value = form.capacidad_carga_bateria || '';
+  document.getElementById('f_modeloBateria').value = form.modelo_bateria || '';
+  document.getElementById('f_tipoControlador').value = form.tipo_controlador || '';
+  document.getElementById('f_tensControlador').value = form.tension_controlador_tomacorriente || '';
+
+  PHOTO_SLOTS.forEach(slot => {
+    const box = document.getElementById('pbox_' + slot);
+    const dataUrl = form.fotos && form.fotos[slot];
+    box.innerHTML = dataUrl
+      ? `<img src="${dataUrl}"><input type="file" accept="image/*" capture="environment">`
+      : `<span class="plus">＋</span><input type="file" accept="image/*" capture="environment">`;
+  });
+
+  updateConditionalPanels();
+  document.getElementById('resumenCodigo').textContent =
+    (form.codigo_suministro || '') + (form.prueba ? '  🧪 PRUEBA' : '') + '  ✏️ EDITANDO';
+  document.getElementById('btnGuardar').textContent = 'Guardar cambios';
+}
+
+async function editarRegistro(id){
+  const rec = await dbGet(id);
+  if (!rec){ toast('No se encontró el registro'); return; }
+  form = rec;
+  editingId = id;
+  poblarUIConForm_();
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab[data-tab="form"]').classList.add('active');
+  document.getElementById('tab-form').classList.remove('hidden');
+  document.getElementById('tab-list').classList.add('hidden');
+  document.getElementById('tab-config').classList.add('hidden');
+  document.getElementById('step-inicio').classList.add('hidden');
+  document.getElementById('step-detalle').classList.remove('hidden');
+  window.scrollTo(0,0);
+  toast(rec.synced
+    ? 'Editando un registro ya sincronizado — al guardar se actualizará también en la Sheet'
+    : 'Editando registro — corrige lo necesario y toca Guardar');
+}
 
 /* ---------- Guardar registro ---------- */
 document.getElementById('btnGuardar').addEventListener('click', async () => {
@@ -692,11 +790,19 @@ document.getElementById('btnGuardar').addEventListener('click', async () => {
 
   if (!form.estado_sistema){ toast('Falta indicar el Estado del Sistema fotovoltaico'); return; }
 
-  form.fecha_hora = new Date().toISOString();
+  const eraEdicion = !!editingId;
+  // Al crear un registro nuevo, la fecha/hora es la del guardado.
+  // Al corregir uno ya existente, se conserva la fecha/hora original de
+  // la visita — no se debe reemplazar por el momento de la corrección.
+  if (!eraEdicion) form.fecha_hora = new Date().toISOString();
   form.synced = false;
   await dbPut(form);
-  toast((form.prueba ? '✔ Registro de PRUEBA guardado' : '✔ Registro guardado') + ' en el celular');
+  toast(eraEdicion
+    ? '✔ Corrección guardada en el celular'
+    : (form.prueba ? '✔ Registro de PRUEBA guardado' : '✔ Registro guardado') + ' en el celular');
 
+  editingId = null;
+  document.getElementById('btnGuardar').textContent = 'Guardar registro en el equipo';
   form = resetForm();
   document.querySelectorAll('.seg button.sel').forEach(b => b.classList.remove('sel'));
   document.querySelectorAll('.ok-x button.sel').forEach(b => b.classList.remove('sel'));
@@ -765,7 +871,7 @@ async function renderRecords(){
     return;
   }
   c.innerHTML = all.map(r => `
-    <div class="record">
+    <div class="record" data-id="${r.id}" style="cursor:pointer;">
       <div class="top">
         <span>${r.codigo_suministro || '(sin código)'}</span>
         <div class="badges">
@@ -776,8 +882,12 @@ async function renderRecords(){
       <div class="meta">${new Date(r.fecha_hora).toLocaleString('es-PE')} · Técnico: ${r.tecnico || '—'}</div>
       <div class="meta">Estado sistema: ${r.estado_sistema || '—'} ${r.gps_lat ? '· GPS ✔' : '· GPS sin capturar'} · Fotos: ${fotosAdjuntasTexto(r)}</div>
       ${r.sync_error ? `<div class="meta" style="color:var(--rojo)">⚠ ${r.sync_error}</div>` : ''}
+      <div class="meta" style="color:var(--verde);font-weight:600;margin-top:4px;">✏️ Toca para corregir</div>
     </div>
   `).join('');
+  c.querySelectorAll('.record').forEach(el => {
+    el.addEventListener('click', () => editarRegistro(el.dataset.id));
+  });
 }
 
 /* ---------- Tabs ---------- */
@@ -943,7 +1053,7 @@ async function syncNow(silent=false){
     const all = await dbAll();
     // Los registros de PRUEBA nunca se sincronizan a la Sheet real
     const pending = all.filter(r => !r.synced && !r.prueba);
-    if (pending.length === 0){ toast('No hay registros pendientes por sincronizar'); return; }
+    if (pending.length === 0){ if (!silent) toast('No hay registros pendientes por sincronizar'); return; }
 
     toast(`Sincronizando ${pending.length} registro(s)…`);
     let okCount = 0;
@@ -963,7 +1073,12 @@ async function syncNow(silent=false){
         await dbPut(rec);
         okCount++;
       } catch (err){
-        rec.sync_error = 'Falló el envío, se reintentará';
+        // Se guarda el motivo real (no un mensaje genérico) para poder
+        // diagnosticar: "Failed to fetch" suele ser señal débil o
+        // inestable aunque el ícono diga "Con señal"; un mensaje distinto
+        // indica que sí llegó al backend pero el script tuvo un problema.
+        const motivo = err && err.message ? err.message : 'error desconocido';
+        rec.sync_error = `Falló (${motivo}) — se reintentará`;
         await dbPut(rec);
       }
     }
@@ -998,6 +1113,13 @@ function updateOnlinePill(){
   // Intento silencioso de sync al abrir la app, si ya hay señal
   // (silencioso: si aún no se configuró la URL, no muestra aviso)
   if (navigator.onLine) syncNow(true);
+
+  // Reintento automático cada 45s mientras la app está abierta: cubre el
+  // caso de señal débil/intermitente en campo, donde el evento 'online'
+  // del navegador no siempre se dispara aunque sí haya cobertura momentánea.
+  setInterval(() => {
+    if (navigator.onLine) syncNow(true);
+  }, 45000);
 })();
 </script>
 </body>

@@ -64,13 +64,11 @@ function procesarRegistro_(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Protección contra duplicados: si este ID ya existe en la Sheet
-    // (por ejemplo, por una doble sincronización desde el celular),
-    // no se vuelve a insertar la fila.
-    if (body.id && yaExisteId_(sheet, body.id)) {
-      return ContentService.createTextOutput(JSON.stringify({ ok: true, skipped: 'ID ya registrado, evitado duplicado' }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
+    // Si este ID ya existe en la Sheet (porque el registro se editó
+    // después de haberse sincronizado, o por un reintento), se ACTUALIZA
+    // esa misma fila en vez de crear una nueva — así las correcciones en
+    // campo sí se reflejan, y nunca se duplica una fila por reintento.
+    const filaExistente = body.id ? buscarFilaPorId_(sheet, body.id) : -1;
 
     const fotoPanelUrl = saveFotoIfPresent_(body.fotos && body.fotos.panel, folder, body.codigo_suministro, 'panel');
     const fotoBateriaUrl = saveFotoIfPresent_(body.fotos && body.fotos.bateria, folder, body.codigo_suministro, 'bateria');
@@ -82,7 +80,7 @@ function procesarRegistro_(e) {
 
     const m = body.mantenimiento || {};
 
-    sheet.appendRow([
+    const fila = [
       body.id || '',
       new Date(),
       body.fecha_hora || '',
@@ -127,7 +125,21 @@ function procesarRegistro_(e) {
       fotoMedicionBateriaUrl,
       fotoMedicionTomacorrienteUrl,
       fotoCablesPvcUrl
-    ]);
+    ];
+
+    if (filaExistente > 0) {
+      // Ya existía: se actualiza esa fila (edición desde el celular).
+      // Si en la edición no se volvió a adjuntar una foto (quedó ''),
+      // se conserva la que ya estaba guardada en esa columna.
+      const anterior = sheet.getRange(filaExistente, 1, 1, HEADERS.length).getValues()[0];
+      const COL_FOTOS_DESDE = HEADERS.indexOf('Foto Panel') + 1; // calculado, no fijo — evita desalineos futuros
+      for (let i = COL_FOTOS_DESDE - 1; i < fila.length; i++) {
+        if (!fila[i] && anterior[i]) fila[i] = anterior[i];
+      }
+      sheet.getRange(filaExistente, 1, 1, fila.length).setValues([fila]);
+    } else {
+      sheet.appendRow(fila);
+    }
 
     return ContentService.createTextOutput(JSON.stringify({ ok: true }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -144,15 +156,16 @@ function doGet(e) {
 }
 
 /**
- * Revisa si un ID de registro ya existe en la columna A de la Sheet,
- * para no insertar la misma fila dos veces si llegara a reintentarse
- * un envío (doble sincronización, corte de señal a mitad de envío, etc.).
+ * Busca en qué fila (número real de la Sheet, 1-indexado) está un ID.
+ * Devuelve -1 si no existe. Se usa para decidir si hay que actualizar
+ * una fila existente (edición desde el celular) o insertar una nueva.
  */
-function yaExisteId_(sheet, id) {
+function buscarFilaPorId_(sheet, id) {
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return false;
+  if (lastRow < 2) return -1;
   const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  return ids.indexOf(id) !== -1;
+  const idx = ids.indexOf(id);
+  return idx === -1 ? -1 : idx + 2; // +2: compensa el encabezado y el índice base-0
 }
 
 function getSheet_() {
