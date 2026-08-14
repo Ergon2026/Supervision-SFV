@@ -42,6 +42,8 @@
   .seg button{flex:1;min-width:90px;padding:11px 8px;border:1.5px solid var(--borde);border-radius:8px;background:#fff;font-size:13px;font-weight:600;color:var(--texto);}
   .seg button.sel{background:var(--verde);border-color:var(--verde);color:#fff;}
   .check-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eef1f0;gap:10px;}
+  .mtto-item{border-bottom:1px solid #eef1f0;}
+  .mtto-item:last-child{border-bottom:none;}
   .check-row:last-child{border-bottom:none;}
   .check-row .txt{font-size:13px;line-height:1.35;flex:1;}
   .check-row .txt small{color:var(--gris);display:block;font-size:11px;margin-top:2px;}
@@ -133,7 +135,7 @@
         <div class="hint">Debe tener exactamente 10 caracteres (ej: 00000456-S)</div>
       </div>
       <div class="field" style="margin-bottom:0;">
-        <label class="required">Ubicación GPS</label>
+        <label>Ubicación GPS</label>
         <div class="gps-box">
           <span id="gpsText" style="flex:1;">Sin capturar</span>
           <button type="button" id="btnGps">Capturar</button>
@@ -481,7 +483,15 @@ function toast(msg, ms=2600){
 }
 
 /* ---------- Estado del formulario ---------- */
-const PHOTO_SLOTS = ['panel','bateria','controlador','medicionPanel','medicionBateria','medicionTomacorriente','cablesPvc'];
+// Fotos obligatorias: las 3 generales + las 3 de medición + cables PVC (ya ligada al ítem 10 de mantenimiento).
+// Fotos opcionales nuevas: una por cada uno de los otros 9 ítems de mantenimiento — el técnico las usa
+// solo si quiere documentar algo puntual, no bloquean el guardado.
+const PHOTO_SLOTS = [
+  'panel','bateria','controlador','medicionPanel','medicionBateria','medicionTomacorriente','cablesPvc',
+  'mtto_modulo_libre_deterioro','mtto_orientacion_norte','mtto_inclinacion','mtto_ubicacion_sombras',
+  'mtto_pedestal','mtto_controlador_deterioro','mtto_tension_entrega','mtto_bateria_deterioro','mtto_cables_uv'
+];
+const REQUIRED_PHOTO_SLOTS = ['panel','bateria','controlador','medicionPanel','medicionBateria','medicionTomacorriente','cablesPvc'];
 
 let form = resetForm();
 let editingId = null; // null = registro nuevo; si tiene un id, se está corrigiendo un registro ya guardado
@@ -520,12 +530,19 @@ const MTTO_ITEMS = [
 function renderMttoList(){
   const c = document.getElementById('mtto-list');
   c.innerHTML = MTTO_ITEMS.map(item => `
-    <div class="check-row">
-      <div class="txt">${item.txt}<small>${item.sub}</small></div>
-      <div class="ok-x">
-        <button type="button" class="ok" data-key="${item.key}" data-val="OK">✔</button>
-        <button type="button" class="x" data-key="${item.key}" data-val="X">✕</button>
+    <div class="mtto-item">
+      <div class="check-row" style="border-bottom:none;padding-bottom:2px;">
+        <div class="txt">${item.txt}<small>${item.sub}</small></div>
+        <div class="ok-x">
+          <button type="button" class="ok" data-key="${item.key}" data-val="OK">✔</button>
+          <button type="button" class="x" data-key="${item.key}" data-val="X">✕</button>
+        </div>
       </div>
+      ${item.key !== 'cables_instalacion' ? `
+      <div class="photo-inline" style="margin:2px 0 10px 0;">
+        <div class="photo-box" id="pbox_mtto_${item.key}"><span class="plus">＋</span><input type="file" accept="image/*" capture="environment"></div>
+        <div class="txt">Foto (opcional)</div>
+      </div>` : ''}
     </div>
   `).join('');
   c.querySelectorAll('.ok-x button').forEach(btn => {
@@ -683,7 +700,6 @@ document.getElementById('btnIniciarRegistro').addEventListener('click', () => {
   if (!codigo){ toast('Falta el código de suministro / sistema'); return; }
   if (codigo.length !== 10){ toast(`El código debe tener exactamente 10 caracteres (tiene ${codigo.length}). Ej: 00000456-S`); return; }
   if (!tecnico){ toast('Falta el nombre/código del técnico'); return; }
-  if (form.gps_lat === null || form.gps_lng === null){ toast('Falta capturar la ubicación GPS (toca "Capturar")'); return; }
   if (!departamento){ toast('Falta completar: Departamento'); return; }
   if (!provincia){ toast('Falta completar: Provincia'); return; }
   if (!distrito){ toast('Falta completar: Distrito'); return; }
@@ -831,7 +847,7 @@ document.getElementById('btnGuardar').addEventListener('click', async () => {
     medicionPanel: 'Foto de la medición del panel', medicionBateria: 'Foto de la medición de la batería',
     medicionTomacorriente: 'Foto de la medición del tomacorriente', cablesPvc: 'Foto de cables con tubería PVC'
   };
-  for (const slot of PHOTO_SLOTS){
+  for (const slot of REQUIRED_PHOTO_SLOTS){
     if (!form.fotos[slot]){
       toast(`Falta adjuntar: ${FOTO_LABELS[slot]}`); return;
     }
@@ -914,6 +930,7 @@ function fotosAdjuntasTexto(r){
   const labels = { panel:'panel', bateria:'batería', controlador:'controlador',
     medicionPanel:'medición panel', medicionBateria:'medición batería',
     medicionTomacorriente:'medición tomacorriente', cablesPvc:'cables PVC' };
+  MTTO_ITEMS.forEach(item => { labels['mtto_' + item.key] = 'mtto: ' + item.txt; });
   return PHOTO_SLOTS.filter(s => r.fotos && r.fotos[s]).map(s => labels[s]).join(', ') || 'ninguna';
 }
 
@@ -1036,7 +1053,12 @@ async function exportExcel(){
       'Tensión controlador tomacorriente (V)': r.tension_controlador_tomacorriente,
       'Descarga data csv': r.descarga_data_csv,
     };
-    MTTO_ITEMS.forEach(item => { row[item.txt] = r.mantenimiento[item.key] || ''; });
+    MTTO_ITEMS.forEach(item => {
+      row[item.txt] = r.mantenimiento[item.key] || '';
+      if (item.key !== 'cables_instalacion'){
+        row[item.txt + ' — Foto'] = (r.fotos && r.fotos['mtto_' + item.key]) ? 'SI' : 'NO';
+      }
+    });
     row['Fotos adjuntas'] = fotosAdjuntasTexto(r);
     row['Sincronizado'] = r.synced ? 'SI' : 'NO';
     return row;
@@ -1062,6 +1084,7 @@ async function exportZip(){
   const labels = { panel:'panel', bateria:'bateria', controlador:'controlador',
     medicionPanel:'medicion_panel', medicionBateria:'medicion_bateria',
     medicionTomacorriente:'medicion_tomacorriente', cablesPvc:'cables_pvc' };
+  MTTO_ITEMS.forEach(item => { labels['mtto_' + item.key] = 'mtto_' + item.key; });
 
   const zip = new JSZip();
   conFotos.forEach(r => {
@@ -1156,7 +1179,7 @@ function updateOnlinePill(){
 }
 
 /* ---------- Init ---------- */
-const APP_VERSION = '2026-08-13.6'; // súbelo cada vez que publiques cambios — ayuda a confirmar qué versión corre cada celular
+const APP_VERSION = '2026-08-13.7'; // súbelo cada vez que publiques cambios — ayuda a confirmar qué versión corre cada celular
 
 (async function init(){
   db = await openDB();

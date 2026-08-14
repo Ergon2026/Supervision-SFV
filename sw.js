@@ -7,7 +7,7 @@
 // una versión nueva del Service Worker comparando este archivo byte por
 // byte — si sw.js queda idéntico, nunca se entera de que index.html
 // cambió, y sigue sirviendo la copia vieja desde caché indefinidamente.
-const CACHE_NAME = 'supervision-sfv-v4';
+const CACHE_NAME = 'supervision-sfv-v5';
 const ASSETS = [
   './',
   './index.html',

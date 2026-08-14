@@ -37,7 +37,11 @@ const HEADERS = [
   'Pedestal verticalidad', 'Controlador libre deterioro', 'Tensión punto entrega', 'Batería libre deterioro',
   'Cables protección UV', 'Cables instalación correcta',
   'Foto Panel', 'Foto Batería', 'Foto Controlador',
-  'Foto Medición Panel', 'Foto Medición Batería', 'Foto Medición Tomacorriente', 'Foto Cables PVC'
+  'Foto Medición Panel', 'Foto Medición Batería', 'Foto Medición Tomacorriente', 'Foto Cables PVC',
+  // Fotos opcionales por ítem de mantenimiento (el técnico las usa solo si quiere documentar algo puntual):
+  'Foto Módulo SFV libre deterioro', 'Foto Orientación Norte', 'Foto Inclinación 15-20°',
+  'Foto Ubicación libre sombras', 'Foto Pedestal verticalidad', 'Foto Controlador libre deterioro',
+  'Foto Tensión punto entrega', 'Foto Batería libre deterioro', 'Foto Cables protección UV'
 ];
 
 function doPost(e) {
@@ -77,6 +81,14 @@ function procesarRegistro_(e) {
     const fotoMedicionBateriaUrl = saveFotoIfPresent_(body.fotos && body.fotos.medicionBateria, folder, body.codigo_suministro, 'medicion_bateria');
     const fotoMedicionTomacorrienteUrl = saveFotoIfPresent_(body.fotos && body.fotos.medicionTomacorriente, folder, body.codigo_suministro, 'medicion_tomacorriente');
     const fotoCablesPvcUrl = saveFotoIfPresent_(body.fotos && body.fotos.cablesPvc, folder, body.codigo_suministro, 'cables_pvc');
+
+    // Fotos opcionales por ítem de mantenimiento (pueden venir vacías —
+    // saveFotoIfPresent_ ya maneja eso devolviendo '' sin error).
+    const MTTO_KEYS_CON_FOTO = ['modulo_libre_deterioro','orientacion_norte','inclinacion','ubicacion_sombras',
+      'pedestal','controlador_deterioro','tension_entrega','bateria_deterioro','cables_uv'];
+    const fotosMttoUrls = MTTO_KEYS_CON_FOTO.map(k =>
+      saveFotoIfPresent_(body.fotos && body.fotos['mtto_' + k], folder, body.codigo_suministro, 'mtto_' + k)
+    );
 
     const m = body.mantenimiento || {};
 
@@ -124,7 +136,8 @@ function procesarRegistro_(e) {
       fotoMedicionPanelUrl,
       fotoMedicionBateriaUrl,
       fotoMedicionTomacorrienteUrl,
-      fotoCablesPvcUrl
+      fotoCablesPvcUrl,
+      ...fotosMttoUrls
     ];
 
     if (filaExistente > 0) {
