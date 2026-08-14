@@ -26,7 +26,7 @@ const SHEET_NAME = 'Supervision SFV';
 const DRIVE_FOLDER_ID = '';
 
 const HEADERS = [
-  'ID', 'Fecha/Hora recibido', 'Fecha/Hora registro', 'Técnico', 'Código suministro/Sistema', 'Registro de prueba',
+  'ID', 'Fecha/Hora recibido (sincronización)', 'Fecha/Hora registro (visita en campo)', 'Técnico', 'Código suministro/Sistema', 'Registro de prueba',
   'GPS Lat', 'GPS Lng', 'GPS Margen de error (m)',
   'Departamento', 'Provincia', 'Distrito', 'Localidad',
   'Estado del Sistema fotovoltaico', 'Detalle sistema completo', 'Detalle sistema incompleto', 'Casuística',
@@ -95,7 +95,7 @@ function procesarRegistro_(e) {
     const fila = [
       body.id || '',
       new Date(),
-      body.fecha_hora || '',
+      body.fecha_hora ? new Date(body.fecha_hora) : '',
       body.tecnico || '',
       body.codigo_suministro || '',
       body.prueba ? 'SI' : 'NO',
