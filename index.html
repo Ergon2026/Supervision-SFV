@@ -110,6 +110,11 @@
   <span class="pill" style="background:#e9edec;color:#444" id="pillSynced">0 sincronizados</span>
 </div>
 
+<div id="backupBanner" class="hidden" style="background:#fde3e0;border-bottom:1px solid #f0b8b0;padding:10px 16px;font-size:13px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">
+  <span style="color:var(--rojo);font-weight:600;flex:1;min-width:180px;">⚠ Tienes varios registros sin respaldar. Exporta Excel/ZIP por seguridad.</span>
+  <button type="button" id="btnBackupBannerExport" style="padding:7px 12px;border-radius:7px;border:none;background:var(--rojo);color:#fff;font-weight:700;font-size:12px;">Exportar ahora</button>
+</div>
+
 <div class="tabs">
   <div class="tab active" data-tab="form">Nuevo registro</div>
   <div class="tab" data-tab="list">Registros (<span id="tabCount">0</span>)</div>
@@ -386,6 +391,10 @@
     <div class="btn-row">
       <button class="btn warn" id="btnClearSynced">Borrar registros ya sincronizados</button>
     </div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div class="hint">Protección de almacenamiento en este celular</div>
+    <div style="font-weight:700;margin-top:2px;" id="cfg_persistencia">Verificando…</div>
   </div>
   <div class="card" style="text-align:center;">
     <div class="hint">Versión del aplicativo instalada en este celular</div>
@@ -906,6 +915,13 @@ async function refreshCounts(){
   document.getElementById('cfg_stats').textContent =
     `${all.length} registros en el celular · ${pending} por sincronizar · ${synced} ya sincronizados · ${prueba} de prueba`;
   updateStorageEstimate(all.length);
+
+  // Aviso proactivo: si se acumulan 5+ registros sin sincronizar, insiste
+  // en exportar un respaldo — es la única red de seguridad real mientras
+  // no hayan llegado a la Sheet (ver incidente de pérdida de datos).
+  const banner = document.getElementById('backupBanner');
+  if (banner) banner.classList.toggle('hidden', pending < 5);
+
   return all;
 }
 
@@ -1073,6 +1089,10 @@ async function exportExcel(){
 }
 document.getElementById('btnExport').addEventListener('click', exportExcel);
 document.getElementById('footBtnExport').addEventListener('click', exportExcel);
+document.getElementById('btnBackupBannerExport').addEventListener('click', async () => {
+  await exportExcel();
+  await exportZip();
+});
 
 /* ---------- Exportar fotos en ZIP (respaldo local, funciona sin señal) ---------- */
 async function exportZip(){
@@ -1179,7 +1199,7 @@ function updateOnlinePill(){
 }
 
 /* ---------- Init ---------- */
-const APP_VERSION = '2026-08-13.7'; // súbelo cada vez que publiques cambios — ayuda a confirmar qué versión corre cada celular
+const APP_VERSION = '2026-08-14.8'; // súbelo cada vez que publiques cambios — ayuda a confirmar qué versión corre cada celular
 
 (async function init(){
   db = await openDB();
@@ -1188,6 +1208,23 @@ const APP_VERSION = '2026-08-13.7'; // súbelo cada vez que publiques cambios �
   refreshCounts();
   const vEl = document.getElementById('cfg_version');
   if (vEl) vEl.textContent = APP_VERSION;
+
+  // Pide al navegador que este sitio quede marcado como "almacenamiento
+  // persistente" — sin esto, Chrome puede borrar la base de datos local
+  // por su cuenta si el celular anda corto de espacio, sin avisar ni
+  // que el usuario haga nada. Con la app instalada (agregada a pantalla
+  // de inicio), Chrome normalmente lo concede solo.
+  if (navigator.storage && navigator.storage.persist){
+    navigator.storage.persist().then(concedido => {
+      const el = document.getElementById('cfg_persistencia');
+      if (el){
+        el.textContent = concedido
+          ? '✔ Protegido — Chrome no debería borrar estos datos por espacio'
+          : '⚠ No protegido — este celular podría borrar los datos guardados si anda corto de espacio. Exporta respaldos seguido.';
+        el.style.color = concedido ? 'var(--verde)' : 'var(--rojo)';
+      }
+    }).catch(()=>{});
+  }
 
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').then(reg => {
